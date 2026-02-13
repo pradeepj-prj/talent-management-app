@@ -1,0 +1,20 @@
+---
+applications:
+  - name: tm-skills-api
+    memory: 256M
+    disk_quota: 512M
+    instances: 1
+    buildpacks:
+      - python_buildpack
+    command: null
+    health-check-type: http
+    health-check-http-endpoint: /health
+    timeout: 120
+    env:
+      DB_HOST: "13.228.165.215"
+      DB_PORT: "5432"
+      DB_NAME: "hr_data"
+      DB_USER: "hr_app"
+      DB_PASSWORD: ""
+      DB_MIN_POOL: "2"
+      DB_MAX_POOL: "5"
