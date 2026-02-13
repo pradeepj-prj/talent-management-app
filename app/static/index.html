@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TM Skills API Explorer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Custom scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: #1e293b; }
+    ::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+
+    /* Proficiency bar colours */
+    .prof-1 { background: #ef4444; }
+    .prof-2 { background: #f97316; }
+    .prof-3 { background: #eab308; }
+    .prof-4 { background: #22c55e; }
+    .prof-5 { background: #16a34a; }
+
+    /* Sidebar active state */
+    .sidebar-item.active { background: #334155; border-left: 3px solid #3b82f6; }
+
+    /* Fade-in for results */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .fade-in { animation: fadeIn 0.25s ease-out; }
+
+    /* Bar chart bars */
+    .bar-chart-bar { transition: width 0.4s ease-out; }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-200 min-h-screen flex flex-col">
+
+<!-- ── Top Bar ──────────────────────────────────────────────────────────────── -->
+<header class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between shrink-0">
+  <div class="flex items-center gap-3">
+    <span class="text-xl font-bold text-blue-400">TM Skills API</span>
+    <span class="text-sm text-slate-400">Interactive Explorer</span>
+  </div>
+  <div class="flex items-center gap-3">
+    <span id="health-dot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+    <span id="health-text" class="text-xs text-slate-400">Checking…</span>
+    <a href="/docs" target="_blank" class="text-xs text-blue-400 hover:underline ml-3">Swagger UI →</a>
+  </div>
+</header>
+
+<div class="flex flex-1 overflow-hidden">
+
+<!-- ── Sidebar ──────────────────────────────────────────────────────────────── -->
+<aside id="sidebar" class="w-72 bg-slate-800 border-r border-slate-700 overflow-y-auto shrink-0">
+</aside>
+
+<!-- ── Main Panel ──────────────────────────────────────────────────────────── -->
+<main class="flex-1 overflow-y-auto p-6">
+  <div id="welcome" class="text-center mt-20">
+    <h2 class="text-2xl font-semibold text-slate-300 mb-2">Welcome to the API Explorer</h2>
+    <p class="text-slate-400">Select an endpoint from the sidebar to get started.</p>
+  </div>
+  <div id="endpoint-panel" class="hidden">
+    <div class="mb-4">
+      <h2 id="ep-title" class="text-xl font-semibold text-blue-400"></h2>
+      <p id="ep-desc" class="text-sm text-slate-400 mt-1"></p>
+      <code id="ep-path" class="text-xs text-slate-500 mt-1 block font-mono"></code>
+    </div>
+    <!-- Parameter form -->
+    <form id="ep-form" class="bg-slate-800 rounded-lg p-4 mb-4 flex flex-wrap gap-4 items-end border border-slate-700">
+    </form>
+    <!-- Results area -->
+    <div id="results" class="fade-in"></div>
+  </div>
+</main>
+
+</div>
+
+<script>
+// ── Endpoint definitions ────────────────────────────────────────────────────
+
+const ENDPOINTS = [
+  // ── Employees ──
+  {
+    group: "Employees",
+    id: "ep1",
+    label: "1 — Skill Profile",
+    desc: "What skills does this employee have, at what proficiency and confidence?",
+    method: "GET",
+    path: "/tm/employees/{employee_id}/skills",
+    params: [
+      { name: "employee_id", in: "path", type: "text", default: "EMP000001" }
+    ],
+    renderer: "skillProfile"
+  },
+  {
+    group: "Employees",
+    id: "ep2",
+    label: "2 — Skill Evidence",
+    desc: "Why do we think this employee is proficient in this skill?",
+    method: "GET",
+    path: "/tm/employees/{employee_id}/skills/{skill_id}/evidence",
+    params: [
+      { name: "employee_id", in: "path", type: "text", default: "EMP000001" },
+      { name: "skill_id", in: "path", type: "number", default: "1" }
+    ],
+    renderer: "skillEvidence"
+  },
+  {
+    group: "Employees",
+    id: "ep8",
+    label: "8 — Skill Passport (Top Skills)",
+    desc: "Skill passport: what are this employee's strongest skills?",
+    method: "GET",
+    path: "/tm/employees/{employee_id}/top-skills",
+    params: [
+      { name: "employee_id", in: "path", type: "text", default: "EMP000001" },
+      { name: "limit", in: "query", type: "number", default: "10" }
+    ],
+    renderer: "skillProfile"
+  },
+  {
+    group: "Employees",
+    id: "ep10",
+    label: "10 — Evidence Inventory",
+    desc: "All evidence items across all skills for this employee.",
+    method: "GET",
+    path: "/tm/employees/{employee_id}/evidence",
+    params: [
+      { name: "employee_id", in: "path", type: "text", default: "EMP000001" }
+    ],
+    renderer: "evidenceInventory"
+  },
+
+  // ── Skills ──
+  {
+    group: "Skills",
+    id: "ep11",
+    label: "11 — Skill Catalog",
+    desc: "Browse the skill taxonomy catalog with optional filters.",
+    method: "GET",
+    path: "/tm/skills",
+    params: [
+      { name: "category", in: "query", type: "text", default: "", placeholder: "e.g. technical" },
+      { name: "search", in: "query", type: "text", default: "", placeholder: "e.g. Python" }
+    ],
+    renderer: "skillCatalog"
+  },
+  {
+    group: "Skills",
+    id: "ep3",
+    label: "3 — Top Experts",
+    desc: "Who are the top experts in this skill?",
+    method: "GET",
+    path: "/tm/skills/{skill_id}/experts",
+    params: [
+      { name: "skill_id", in: "path", type: "number", default: "1" },
+      { name: "min_proficiency", in: "query", type: "number", default: "4" },
+      { name: "limit", in: "query", type: "number", default: "20" }
+    ],
+    renderer: "topExperts"
+  },
+  {
+    group: "Skills",
+    id: "ep4",
+    label: "4 — Skill Coverage",
+    desc: "How many employees have this skill? Proficiency distribution histogram.",
+    method: "GET",
+    path: "/tm/skills/{skill_id}/coverage",
+    params: [
+      { name: "skill_id", in: "path", type: "number", default: "1" },
+      { name: "min_proficiency", in: "query", type: "number", default: "3" }
+    ],
+    renderer: "skillCoverage"
+  },
+  {
+    group: "Skills",
+    id: "ep6",
+    label: "6 — Evidence-Backed Candidates",
+    desc: "Who has this skill with strong evidence to back it up?",
+    method: "GET",
+    path: "/tm/skills/{skill_id}/candidates",
+    params: [
+      { name: "skill_id", in: "path", type: "number", default: "1" },
+      { name: "min_proficiency", in: "query", type: "number", default: "3" },
+      { name: "min_evidence_strength", in: "query", type: "number", default: "4" },
+      { name: "limit", in: "query", type: "number", default: "20" }
+    ],
+    renderer: "evidenceCandidates"
+  },
+  {
+    group: "Skills",
+    id: "ep7",
+    label: "7 — Stale Skills",
+    desc: "Which employees have this skill but it hasn't been validated recently?",
+    method: "GET",
+    path: "/tm/skills/{skill_id}/stale",
+    params: [
+      { name: "skill_id", in: "path", type: "number", default: "1" },
+      { name: "older_than_days", in: "query", type: "number", default: "365" }
+    ],
+    renderer: "staleSkills"
+  },
+  {
+    group: "Skills",
+    id: "ep9",
+    label: "9 — Co-occurring Skills",
+    desc: "For employees strong in this skill, what other skills do they commonly have?",
+    method: "GET",
+    path: "/tm/skills/{skill_id}/cooccurring",
+    params: [
+      { name: "skill_id", in: "path", type: "number", default: "1" },
+      { name: "min_proficiency", in: "query", type: "number", default: "3" },
+      { name: "top", in: "query", type: "number", default: "20" }
+    ],
+    renderer: "cooccurring"
+  },
+
+  // ── Talent Search ──
+  {
+    group: "Talent Search",
+    id: "ep5",
+    label: "5 — Multi-Skill Search",
+    desc: "Find employees who have ALL specified skills at minimum proficiency (AND search).",
+    method: "GET",
+    path: "/tm/talent/search",
+    params: [
+      { name: "skills", in: "query", type: "text", default: "Python,SQL" },
+      { name: "min_proficiency", in: "query", type: "number", default: "3" }
+    ],
+    renderer: "talentSearch"
+  },
+
+  // ── Organizations ──
+  {
+    group: "Organizations",
+    id: "ep12a",
+    label: "12a — Org Skill Summary",
+    desc: "What are the top skills in this org unit (including child orgs)?",
+    method: "GET",
+    path: "/tm/orgs/{org_unit_id}/skills/summary",
+    params: [
+      { name: "org_unit_id", in: "path", type: "text", default: "ORG030" },
+      { name: "limit", in: "query", type: "number", default: "20" }
+    ],
+    renderer: "orgSummary"
+  },
+  {
+    group: "Organizations",
+    id: "ep12b",
+    label: "12b — Org Skill Experts",
+    desc: "Who in this org unit has this skill at minimum proficiency?",
+    method: "GET",
+    path: "/tm/orgs/{org_unit_id}/skills/{skill_id}/experts",
+    params: [
+      { name: "org_unit_id", in: "path", type: "text", default: "ORG030" },
+      { name: "skill_id", in: "path", type: "number", default: "1" },
+      { name: "min_proficiency", in: "query", type: "number", default: "3" },
+      { name: "limit", in: "query", type: "number", default: "20" }
+    ],
+    renderer: "orgExperts"
+  }
+];
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function profBar(level, maxW = "w-32") {
+  const pct = (level / 5) * 100;
+  return `<div class="flex items-center gap-2">
+    <div class="${maxW} h-3 bg-slate-700 rounded-full overflow-hidden">
+      <div class="h-full rounded-full prof-${level} bar-chart-bar" style="width:${pct}%"></div>
+    </div>
+    <span class="text-xs font-mono text-slate-300">${level}/5</span>
+  </div>`;
+}
+
+function confBadge(confidence) {
+  const colors = confidence >= 80 ? "bg-green-900 text-green-300"
+               : confidence >= 50 ? "bg-yellow-900 text-yellow-300"
+               : "bg-red-900 text-red-300";
+  return `<span class="px-1.5 py-0.5 rounded text-xs font-mono ${colors}">${confidence}%</span>`;
+}
+
+function categoryBadge(cat) {
+  const colorMap = {
+    technical: "bg-blue-900 text-blue-300",
+    functional: "bg-purple-900 text-purple-300",
+    leadership: "bg-amber-900 text-amber-300",
+    domain: "bg-teal-900 text-teal-300",
+    tool: "bg-indigo-900 text-indigo-300",
+    other: "bg-slate-700 text-slate-300"
+  };
+  const c = colorMap[(cat || "").toLowerCase()] || colorMap.other;
+  return `<span class="px-1.5 py-0.5 rounded text-xs ${c}">${cat || "—"}</span>`;
+}
+
+function employeeCard(emp) {
+  if (!emp) return "";
+  return `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700 mb-4 inline-block">
+    <span class="font-mono text-blue-300 text-sm">${emp.employee_id}</span>
+    <span class="text-slate-200 ml-2 font-semibold">${emp.display_name || "—"}</span>
+    ${emp.job_title ? `<span class="text-slate-400 text-sm ml-2">${emp.job_title}</span>` : ""}
+    ${emp.org_name ? `<span class="text-slate-500 text-xs ml-2">${emp.org_name}</span>` : ""}
+  </div>`;
+}
+
+function formatDate(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
+function skillInfoHeader(skill) {
+  if (!skill) return "";
+  return `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700 mb-4 inline-block">
+    <span class="font-mono text-blue-300 text-sm">Skill #${skill.skill_id}</span>
+    <span class="text-slate-200 ml-2 font-semibold">${skill.name}</span>
+    ${categoryBadge(skill.category)}
+    ${skill.description ? `<p class="text-slate-400 text-xs mt-1">${skill.description}</p>` : ""}
+  </div>`;
+}
+
+function rawJsonToggle(data) {
+  const id = "raw-" + Math.random().toString(36).slice(2, 8);
+  return `<details class="mt-4">
+    <summary class="text-xs text-slate-500 cursor-pointer hover:text-slate-300">Show Raw JSON</summary>
+    <pre id="${id}" class="bg-slate-950 text-slate-400 text-xs p-3 rounded mt-2 overflow-x-auto max-h-96 overflow-y-auto">${JSON.stringify(data, null, 2).replace(/</g, "&lt;")}</pre>
+  </details>`;
+}
+
+function noResults(msg) {
+  return `<div class="text-slate-400 text-center py-8">${msg || "No results found."}</div>`;
+}
+
+// ── Renderers ───────────────────────────────────────────────────────────────
+
+const renderers = {
+
+  // Endpoints 1 & 8: Employee skill profile / passport
+  skillProfile(data) {
+    let html = employeeCard(data.employee);
+    if (data.total_skills !== undefined) {
+      html += `<p class="text-sm text-slate-400 mb-2">Total skills: <strong class="text-slate-200">${data.total_skills}</strong></p>`;
+    }
+    const skills = data.skills || [];
+    if (!skills.length) return html + noResults("No skills found for this employee.");
+    html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+        <th class="py-2 pr-3">Skill</th><th class="pr-3">Category</th><th class="pr-3">Proficiency</th>
+        <th class="pr-3">Confidence</th><th class="pr-3">Source</th><th>Updated</th>
+      </tr></thead><tbody>`;
+    for (const s of skills) {
+      html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+        <td class="py-2 pr-3 font-medium">${s.skill_name}</td>
+        <td class="pr-3">${categoryBadge(s.category)}</td>
+        <td class="pr-3">${profBar(s.proficiency)}</td>
+        <td class="pr-3">${confBadge(s.confidence)}</td>
+        <td class="pr-3 text-xs text-slate-400">${s.source || "—"}</td>
+        <td class="text-xs text-slate-400">${formatDate(s.last_updated_at)}</td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 2: Skill evidence detail
+  skillEvidence(data) {
+    let html = employeeCard(data.employee);
+    html += `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700 mb-4">
+      <span class="font-semibold">${data.skill_name}</span> (ID: ${data.skill_id})
+      <div class="flex gap-4 mt-2">
+        <span>Proficiency: ${profBar(data.proficiency)}</span>
+        <span>Confidence: ${confBadge(data.confidence)}</span>
+      </div>
+    </div>`;
+    const ev = data.evidence || [];
+    if (!ev.length) return html + noResults("No evidence items found.");
+    html += `<h3 class="text-sm font-semibold text-slate-300 mb-2">Evidence Items (${ev.length})</h3>`;
+    for (const e of ev) {
+      html += `<div class="bg-slate-800/60 rounded p-3 mb-2 border border-slate-700">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="px-1.5 py-0.5 rounded text-xs bg-indigo-900 text-indigo-300">${e.evidence_type}</span>
+          <span class="font-medium text-sm">${e.title}</span>
+          <span class="ml-auto text-xs text-slate-500">${formatDate(e.evidence_date)}</span>
+        </div>
+        <div class="text-xs text-slate-400 flex gap-3">
+          ${e.issuer_or_system ? `<span>Issuer: ${e.issuer_or_system}</span>` : ""}
+          <span>Signal: ${profBar(e.signal_strength, "w-20")}</span>
+        </div>
+        ${e.notes ? `<p class="text-xs text-slate-500 mt-1">${e.notes}</p>` : ""}
+      </div>`;
+    }
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 10: Evidence inventory
+  evidenceInventory(data) {
+    let html = employeeCard(data.employee);
+    html += `<p class="text-sm text-slate-400 mb-3">Total evidence items: <strong class="text-slate-200">${data.total_items}</strong></p>`;
+    const ev = data.evidence || [];
+    if (!ev.length) return html + noResults("No evidence items found.");
+    html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+        <th class="py-2 pr-3">Skill</th><th class="pr-3">Type</th><th class="pr-3">Title</th>
+        <th class="pr-3">Signal</th><th class="pr-3">Date</th><th>Issuer</th>
+      </tr></thead><tbody>`;
+    for (const e of ev) {
+      html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+        <td class="py-2 pr-3 font-medium">${e.skill_name}</td>
+        <td class="pr-3"><span class="px-1.5 py-0.5 rounded text-xs bg-indigo-900 text-indigo-300">${e.evidence_type}</span></td>
+        <td class="pr-3">${e.title}</td>
+        <td class="pr-3">${profBar(e.signal_strength, "w-20")}</td>
+        <td class="pr-3 text-xs text-slate-400">${formatDate(e.evidence_date)}</td>
+        <td class="text-xs text-slate-400">${e.issuer_or_system || "—"}</td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 11: Skill catalog
+  skillCatalog(data) {
+    const skills = data.skills || [];
+    let html = `<p class="text-sm text-slate-400 mb-3">Total skills: <strong class="text-slate-200">${data.total}</strong></p>`;
+    if (!skills.length) return html + noResults("No skills match your filters.");
+    html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+        <th class="py-2 pr-3">ID</th><th class="pr-3">Name</th><th class="pr-3">Category</th><th>Description</th>
+      </tr></thead><tbody>`;
+    for (const s of skills) {
+      html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+        <td class="py-2 pr-3 font-mono text-xs text-slate-400">${s.skill_id}</td>
+        <td class="pr-3 font-medium">${s.name}</td>
+        <td class="pr-3">${categoryBadge(s.category)}</td>
+        <td class="text-slate-400 text-xs">${s.description || "—"}</td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 3: Top experts
+  topExperts(data) {
+    let html = skillInfoHeader(data.skill);
+    html += `<p class="text-sm text-slate-400 mb-3">
+      Min proficiency: ${data.min_proficiency} &middot; Matching: <strong class="text-slate-200">${data.total_matching}</strong>
+    </p>`;
+    const experts = data.experts || [];
+    if (!experts.length) return html + noResults("No experts found at this proficiency level.");
+    html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+        <th class="py-2 pr-3">Employee</th><th class="pr-3">Name</th><th class="pr-3">Job Title</th>
+        <th class="pr-3">Org</th><th class="pr-3">Proficiency</th><th class="pr-3">Confidence</th><th>Updated</th>
+      </tr></thead><tbody>`;
+    for (const e of experts) {
+      html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+        <td class="py-2 pr-3 font-mono text-xs text-blue-300">${e.employee_id}</td>
+        <td class="pr-3">${e.display_name || "—"}</td>
+        <td class="pr-3 text-xs text-slate-400">${e.job_title || "—"}</td>
+        <td class="pr-3 text-xs text-slate-400">${e.org_name || "—"}</td>
+        <td class="pr-3">${profBar(e.proficiency)}</td>
+        <td class="pr-3">${confBadge(e.confidence)}</td>
+        <td class="text-xs text-slate-400">${formatDate(e.last_updated_at)}</td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 4: Skill coverage — histogram
+  skillCoverage(data) {
+    let html = skillInfoHeader(data.skill);
+    html += `<div class="flex gap-6 text-sm text-slate-400 mb-4">
+      <span>Total employees: <strong class="text-slate-200">${data.total_employees}</strong></span>
+      <span>At min proficiency (${data.min_proficiency}+): <strong class="text-slate-200">${data.employees_at_min}</strong></span>
+    </div>`;
+    const dist = data.distribution || [];
+    if (!dist.length) return html + noResults("No distribution data.");
+    const maxCount = Math.max(...dist.map(d => d.count), 1);
+    html += `<h3 class="text-sm font-semibold text-slate-300 mb-3">Proficiency Distribution</h3>`;
+    html += `<div class="space-y-2">`;
+    for (const d of dist) {
+      const pct = (d.count / maxCount) * 100;
+      html += `<div class="flex items-center gap-3">
+        <span class="w-24 text-right text-sm text-slate-400">Level ${d.proficiency}</span>
+        <div class="flex-1 h-7 bg-slate-700 rounded overflow-hidden relative">
+          <div class="h-full prof-${d.proficiency} bar-chart-bar rounded" style="width:${pct}%"></div>
+          <span class="absolute right-2 top-1 text-xs font-mono text-slate-200">${d.count}</span>
+        </div>
+      </div>`;
+    }
+    html += "</div>";
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 6: Evidence-backed candidates
+  evidenceCandidates(data) {
+    let html = skillInfoHeader(data.skill);
+    html += `<p class="text-sm text-slate-400 mb-3">
+      Min proficiency: ${data.min_proficiency} &middot; Min evidence strength: ${data.min_evidence_strength}
+    </p>`;
+    const cands = data.candidates || [];
+    if (!cands.length) return html + noResults("No candidates match the criteria.");
+    for (const c of cands) {
+      html += `<div class="bg-slate-800/60 rounded-lg p-3 mb-3 border border-slate-700">
+        <div class="flex items-center gap-3 mb-2">
+          <span class="font-mono text-blue-300 text-sm">${c.employee_id}</span>
+          <span class="font-medium">${c.display_name || "—"}</span>
+          <span class="text-xs text-slate-400">${c.job_title || ""}</span>
+          <span class="ml-auto flex items-center gap-3">${profBar(c.proficiency)} ${confBadge(c.confidence)}</span>
+        </div>`;
+      if (c.top_evidence && c.top_evidence.length) {
+        html += `<div class="ml-4 space-y-1">`;
+        for (const e of c.top_evidence) {
+          html += `<div class="flex items-center gap-2 text-xs text-slate-400">
+            <span class="px-1 py-0.5 rounded bg-indigo-900 text-indigo-300">${e.evidence_type}</span>
+            <span>${e.title}</span>
+            <span class="ml-auto">Signal: ${e.signal_strength}/5</span>
+          </div>`;
+        }
+        html += "</div>";
+      }
+      html += "</div>";
+    }
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 7: Stale skills
+  staleSkills(data) {
+    let html = skillInfoHeader(data.skill);
+    html += `<p class="text-sm text-slate-400 mb-3">
+      Older than: ${data.older_than_days} days &middot; Total stale: <strong class="text-slate-200">${data.total_stale}</strong>
+    </p>`;
+    const entries = data.stale_entries || [];
+    if (!entries.length) return html + noResults("No stale skill entries found.");
+    html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+        <th class="py-2 pr-3">Employee</th><th class="pr-3">Name</th><th class="pr-3">Job Title</th>
+        <th class="pr-3">Proficiency</th><th class="pr-3">Confidence</th><th class="pr-3">Last Updated</th><th>Days Stale</th>
+      </tr></thead><tbody>`;
+    for (const e of entries) {
+      const daysClass = e.days_since_update > 730 ? "text-red-400 font-bold" : e.days_since_update > 365 ? "text-orange-400" : "text-yellow-300";
+      html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+        <td class="py-2 pr-3 font-mono text-xs text-blue-300">${e.employee_id}</td>
+        <td class="pr-3">${e.display_name || "—"}</td>
+        <td class="pr-3 text-xs text-slate-400">${e.job_title || "—"}</td>
+        <td class="pr-3">${profBar(e.proficiency)}</td>
+        <td class="pr-3">${confBadge(e.confidence)}</td>
+        <td class="pr-3 text-xs text-slate-400">${formatDate(e.last_updated_at)}</td>
+        <td class="pr-3 text-sm ${daysClass}">${e.days_since_update}d</td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 9: Co-occurring skills — horizontal bar chart
+  cooccurring(data) {
+    let html = skillInfoHeader(data.skill);
+    html += `<p class="text-sm text-slate-400 mb-3">Min proficiency: ${data.min_proficiency}</p>`;
+    const cooc = data.cooccurring || [];
+    if (!cooc.length) return html + noResults("No co-occurring skills found.");
+    const maxCount = Math.max(...cooc.map(c => c.co_occurrence_count), 1);
+    html += `<h3 class="text-sm font-semibold text-slate-300 mb-3">Co-occurring Skills</h3>`;
+    html += `<div class="space-y-2">`;
+    for (const c of cooc) {
+      const pct = (c.co_occurrence_count / maxCount) * 100;
+      html += `<div class="flex items-center gap-3">
+        <span class="w-40 text-right text-sm truncate" title="${c.skill_name}">${c.skill_name}</span>
+        ${categoryBadge(c.category)}
+        <div class="flex-1 h-6 bg-slate-700 rounded overflow-hidden relative">
+          <div class="h-full bg-blue-600 bar-chart-bar rounded" style="width:${pct}%"></div>
+          <span class="absolute right-2 top-0.5 text-xs font-mono text-slate-200">${c.co_occurrence_count}</span>
+        </div>
+      </div>`;
+    }
+    html += "</div>";
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 5: Talent search — cards
+  talentSearch(data) {
+    const q = data.query || {};
+    let html = `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700 mb-4">
+      <span class="text-sm text-slate-400">Search:</span>
+      <span class="font-semibold text-slate-200 ml-2">${(q.skill_names || []).join(", ")}</span>
+      <span class="text-sm text-slate-400 ml-3">Min proficiency: ${q.min_proficiency}</span>
+      <span class="text-sm text-slate-400 ml-3">Results: <strong class="text-slate-200">${q.results_count}</strong></span>
+    </div>`;
+    const results = data.results || [];
+    if (!results.length) return html + noResults("No employees match all specified skills.");
+    for (const r of results) {
+      html += `<div class="bg-slate-800/60 rounded-lg p-4 mb-3 border border-slate-700">
+        <div class="flex items-center gap-3 mb-3">
+          <span class="font-mono text-blue-300 text-sm">${r.employee_id}</span>
+          <span class="font-semibold text-lg">${r.display_name || "—"}</span>
+          ${r.job_title ? `<span class="text-sm text-slate-400">${r.job_title}</span>` : ""}
+          ${r.org_name ? `<span class="text-xs text-slate-500">${r.org_name}</span>` : ""}
+          ${r.seniority_level ? `<span class="ml-auto text-xs text-slate-400">Seniority: ${r.seniority_level}</span>` : ""}
+        </div>
+        <div class="flex flex-wrap gap-2">`;
+      for (const ms of (r.matched_skills || [])) {
+        html += `<div class="bg-slate-700 rounded px-3 py-1.5 text-sm flex items-center gap-2">
+          <span class="font-medium">${ms.skill_name}</span>
+          ${profBar(ms.proficiency, "w-20")}
+          ${confBadge(ms.confidence)}
+        </div>`;
+      }
+      html += `</div></div>`;
+    }
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 12a: Org skill summary
+  orgSummary(data) {
+    const org = data.org || {};
+    let html = `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700 mb-4">
+      <span class="font-mono text-blue-300 text-sm">${org.org_id}</span>
+      <span class="text-slate-200 ml-2 font-semibold">${org.org_name}</span>
+      ${org.business_unit ? `<span class="text-xs text-slate-400 ml-2">(${org.business_unit})</span>` : ""}
+      <div class="text-sm text-slate-400 mt-1">
+        Includes children: ${data.includes_children ? "Yes" : "No"} &middot;
+        Profiled employees: <strong class="text-slate-200">${data.total_profiled_employees}</strong>
+      </div>
+    </div>`;
+    const skills = data.top_skills || [];
+    if (!skills.length) return html + noResults("No skill data for this org.");
+    html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+        <th class="py-2 pr-3">Skill</th><th class="pr-3">Category</th><th class="pr-3">Employees</th><th>Avg Proficiency</th>
+      </tr></thead><tbody>`;
+    for (const s of skills) {
+      const rounded = Math.round(s.avg_proficiency);
+      html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+        <td class="py-2 pr-3 font-medium">${s.name}</td>
+        <td class="pr-3">${categoryBadge(s.category)}</td>
+        <td class="pr-3 font-mono text-slate-200">${s.employee_count}</td>
+        <td class="pr-3">
+          <div class="flex items-center gap-2">
+            <div class="w-32 h-3 bg-slate-700 rounded-full overflow-hidden">
+              <div class="h-full rounded-full prof-${rounded || 3} bar-chart-bar" style="width:${(s.avg_proficiency / 5) * 100}%"></div>
+            </div>
+            <span class="text-xs font-mono text-slate-300">${s.avg_proficiency.toFixed(1)}</span>
+          </div>
+        </td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+    html += rawJsonToggle(data);
+    return html;
+  },
+
+  // Endpoint 12b: Org skill experts
+  orgExperts(data) {
+    const org = data.org || {};
+    let html = `<div class="bg-slate-800 rounded-lg p-3 border border-slate-700 mb-4">
+      <span class="font-mono text-blue-300 text-sm">${org.org_id}</span>
+      <span class="text-slate-200 ml-2 font-semibold">${org.org_name}</span>
+      <span class="text-sm text-slate-400 ml-3">Skill: ${data.skill_name} (ID: ${data.skill_id})</span>
+      <span class="text-sm text-slate-400 ml-3">Min: ${data.min_proficiency}</span>
+      <span class="text-sm text-slate-400 ml-3">Total: <strong class="text-slate-200">${data.total_matching}</strong></span>
+    </div>`;
+    const experts = data.experts || [];
+    if (!experts.length) return html + noResults("No experts found in this org.");
+    html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+        <th class="py-2 pr-3">Employee</th><th class="pr-3">Name</th><th class="pr-3">Job Title</th>
+        <th class="pr-3">Org</th><th class="pr-3">Proficiency</th><th class="pr-3">Confidence</th><th>Updated</th>
+      </tr></thead><tbody>`;
+    for (const e of experts) {
+      html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+        <td class="py-2 pr-3 font-mono text-xs text-blue-300">${e.employee_id}</td>
+        <td class="pr-3">${e.display_name || "—"}</td>
+        <td class="pr-3 text-xs text-slate-400">${e.job_title || "—"}</td>
+        <td class="pr-3 text-xs text-slate-400">${e.org_name || "—"}</td>
+        <td class="pr-3">${profBar(e.proficiency)}</td>
+        <td class="pr-3">${confBadge(e.confidence)}</td>
+        <td class="text-xs text-slate-400">${formatDate(e.last_updated_at)}</td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+    html += rawJsonToggle(data);
+    return html;
+  }
+};
+
+// ── Sidebar construction ────────────────────────────────────────────────────
+
+function buildSidebar() {
+  const sidebar = document.getElementById("sidebar");
+  const groups = {};
+  for (const ep of ENDPOINTS) {
+    if (!groups[ep.group]) groups[ep.group] = [];
+    groups[ep.group].push(ep);
+  }
+
+  let html = "";
+  for (const [group, eps] of Object.entries(groups)) {
+    html += `<div class="border-b border-slate-700">
+      <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:bg-slate-700/50 flex items-center justify-between group-toggle" data-group="${group}">
+        ${group}
+        <svg class="w-3 h-3 transform transition-transform group-arrow" viewBox="0 0 12 12"><path d="M3 5l3 3 3-3" stroke="currentColor" fill="none" stroke-width="1.5"/></svg>
+      </button>
+      <div class="group-items" data-group="${group}">`;
+    for (const ep of eps) {
+      html += `<div class="sidebar-item px-4 py-2 text-sm cursor-pointer hover:bg-slate-700/50 border-l-3 border-transparent" data-id="${ep.id}">
+        ${ep.label}
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+  sidebar.innerHTML = html;
+
+  // Toggle group collapse
+  sidebar.querySelectorAll(".group-toggle").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const group = btn.dataset.group;
+      const items = sidebar.querySelector(`.group-items[data-group="${group}"]`);
+      const arrow = btn.querySelector(".group-arrow");
+      items.classList.toggle("hidden");
+      arrow.classList.toggle("rotate-180");
+    });
+  });
+
+  // Endpoint click
+  sidebar.querySelectorAll(".sidebar-item").forEach(item => {
+    item.addEventListener("click", () => selectEndpoint(item.dataset.id));
+  });
+}
+
+// ── Endpoint selection ──────────────────────────────────────────────────────
+
+let currentEndpoint = null;
+
+function selectEndpoint(id) {
+  const ep = ENDPOINTS.find(e => e.id === id);
+  if (!ep) return;
+  currentEndpoint = ep;
+
+  // Sidebar active state
+  document.querySelectorAll(".sidebar-item").forEach(el => el.classList.remove("active"));
+  document.querySelector(`.sidebar-item[data-id="${id}"]`)?.classList.add("active");
+
+  // Show panel
+  document.getElementById("welcome").classList.add("hidden");
+  const panel = document.getElementById("endpoint-panel");
+  panel.classList.remove("hidden");
+
+  document.getElementById("ep-title").textContent = `Endpoint ${ep.label}`;
+  document.getElementById("ep-desc").textContent = ep.desc;
+  document.getElementById("ep-path").textContent = `${ep.method} ${ep.path}`;
+
+  // Build form
+  const form = document.getElementById("ep-form");
+  let formHtml = "";
+  for (const p of ep.params) {
+    const label = p.name.replace(/_/g, " ");
+    formHtml += `<div class="flex flex-col">
+      <label class="text-xs text-slate-400 mb-1">${label} ${p.in === "path" ? '<span class="text-red-400">*</span>' : ""}</label>
+      <input name="${p.name}" type="${p.type}" value="${p.default}"
+             placeholder="${p.placeholder || ""}"
+             class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-40" />
+    </div>`;
+  }
+  formHtml += `<button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded text-sm font-medium transition-colors">
+    Run Query
+  </button>`;
+  form.innerHTML = formHtml;
+
+  // Clear results
+  document.getElementById("results").innerHTML = "";
+}
+
+// ── Form submission ─────────────────────────────────────────────────────────
+
+document.getElementById("ep-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentEndpoint) return;
+
+  const ep = currentEndpoint;
+  const formData = new FormData(e.target);
+  const values = Object.fromEntries(formData.entries());
+
+  // Build URL
+  let url = ep.path;
+  const queryParams = [];
+
+  for (const p of ep.params) {
+    const val = values[p.name] || "";
+    if (p.in === "path") {
+      url = url.replace(`{${p.name}}`, encodeURIComponent(val));
+    } else if (val !== "") {
+      queryParams.push(`${p.name}=${encodeURIComponent(val)}`);
+    }
+  }
+
+  if (queryParams.length) url += "?" + queryParams.join("&");
+
+  const resultsDiv = document.getElementById("results");
+  resultsDiv.innerHTML = `<div class="flex items-center gap-2 text-slate-400 py-8 justify-center">
+    <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60 30"/></svg>
+    Loading…
+  </div>`;
+
+  try {
+    const resp = await fetch(url);
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      resultsDiv.innerHTML = `<div class="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300">
+        <strong>Error ${resp.status}</strong>: ${data.detail || JSON.stringify(data)}
+      </div>`;
+      return;
+    }
+
+    const renderer = renderers[ep.renderer];
+    if (renderer) {
+      resultsDiv.innerHTML = `<div class="fade-in">${renderer(data)}</div>`;
+    } else {
+      resultsDiv.innerHTML = `<pre class="bg-slate-950 text-slate-400 text-xs p-4 rounded overflow-x-auto">${JSON.stringify(data, null, 2).replace(/</g, "&lt;")}</pre>`;
+    }
+  } catch (err) {
+    resultsDiv.innerHTML = `<div class="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300">
+      <strong>Network Error</strong>: ${err.message}. Is the API server running?
+    </div>`;
+  }
+});
+
+// ── Health check ────────────────────────────────────────────────────────────
+
+async function checkHealth() {
+  const dot = document.getElementById("health-dot");
+  const text = document.getElementById("health-text");
+  try {
+    const resp = await fetch("/health");
+    const data = await resp.json();
+    if (data.status === "healthy") {
+      dot.className = "w-2.5 h-2.5 rounded-full bg-green-500";
+      text.textContent = "API healthy";
+      text.className = "text-xs text-green-400";
+    } else {
+      dot.className = "w-2.5 h-2.5 rounded-full bg-yellow-500";
+      text.textContent = `DB: ${data.db}`;
+      text.className = "text-xs text-yellow-400";
+    }
+  } catch {
+    dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+    text.textContent = "API unreachable";
+    text.className = "text-xs text-red-400";
+  }
+}
+
+// ── Init ────────────────────────────────────────────────────────────────────
+
+buildSidebar();
+checkHealth();
+setInterval(checkHealth, 30000);
+</script>
+
+</body>
+</html>

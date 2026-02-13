@@ -4,7 +4,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.database import create_pool, close_pool
 from app.routers import employees, skills, talent_search, orgs
@@ -74,6 +75,15 @@ app.include_router(employees.router)
 app.include_router(skills.router)
 app.include_router(talent_search.router)
 app.include_router(orgs.router)
+
+
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Redirect root to the interactive API explorer."""
+    return RedirectResponse(url="/static/index.html")
 
 
 @app.get("/health", tags=["Health"])
