@@ -18,6 +18,7 @@ env/
 
 # Environment
 .env
+.api-key
 
 # Testing
 .pytest_cache/

@@ -2,6 +2,8 @@ __pycache__/
 *.egg-info/
 .venv/
 .env
+.api-key
+deploy.sh
 tests/
 scripts/
 .pytest_cache/
