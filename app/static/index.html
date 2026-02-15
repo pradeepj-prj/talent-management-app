@@ -38,6 +38,8 @@
     <span class="text-sm text-slate-400">Interactive Explorer</span>
   </div>
   <div class="flex items-center gap-3">
+    <input id="api-key-input" type="password" placeholder="API Key (if required)"
+           class="bg-slate-900 border border-slate-600 rounded px-3 py-1 text-xs text-slate-200 focus:border-blue-500 focus:outline-none w-48" />
     <span id="health-dot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
     <span id="health-text" class="text-xs text-slate-400">Checking…</span>
     <a href="/docs" target="_blank" class="text-xs text-blue-400 hover:underline ml-3">Swagger UI →</a>
@@ -808,7 +810,10 @@ document.getElementById("ep-form").addEventListener("submit", async (e) => {
   </div>`;
 
   try {
-    const resp = await fetch(url);
+    const headers = {};
+    const apiKey = document.getElementById("api-key-input").value.trim();
+    if (apiKey) headers["X-API-Key"] = apiKey;
+    const resp = await fetch(url, { headers });
     const data = await resp.json();
 
     if (!resp.ok) {

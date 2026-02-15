@@ -17,6 +17,16 @@ class Settings(BaseSettings):
     db_min_pool: int = 2
     db_max_pool: int = 10
 
+    # CORS — comma-separated origins (e.g. "http://localhost:8000,https://my-app.com")
+    cors_origins: list[str] = ["http://localhost:8000", "http://localhost:3000"]
+
+    # API Key authentication — comma-separated keys; empty = auth disabled
+    api_keys: set[str] = set()
+
+    # Rate limiting
+    rate_limit_enabled: bool = True
+    rate_limit_default: str = "60/minute"
+
     @property
     def dsn(self) -> str:
         return f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{self.db_name}"

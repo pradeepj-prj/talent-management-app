@@ -2,12 +2,20 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.auth import require_api_key
+from app.config import settings
 from app.database import create_pool, close_pool
+from app.middleware.logging import AccessLogMiddleware
 from app.routers import employees, skills, talent_search, orgs
 
 DESCRIPTION = """
@@ -53,13 +61,53 @@ app = FastAPI(
     openapi_tags=TAGS_METADATA,
 )
 
+# ── Rate limiting ────────────────────────────────────────────────────────────
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=[settings.rate_limit_default] if settings.rate_limit_enabled else [],
+    enabled=settings.rate_limit_enabled,
+)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "OPTIONS"],
+    allow_headers=["Authorization", "X-API-Key", "Content-Type"],
 )
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add standard security headers to every response."""
+
+    HEADERS = {
+        "X-Content-Type-Options": "nosniff",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Cache-Control": "no-store",
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
+        "Content-Security-Policy": (
+            "default-src 'self'; "
+            "script-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'"
+        ),
+    }
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        for header, value in self.HEADERS.items():
+            response.headers[header] = value
+        return response
+
+
+app.add_middleware(AccessLogMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(SlowAPIMiddleware)
 
 
 @app.exception_handler(Exception)
@@ -71,10 +119,11 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     )
 
 
-app.include_router(employees.router)
-app.include_router(skills.router)
-app.include_router(talent_search.router)
-app.include_router(orgs.router)
+_auth = [Depends(require_api_key)]
+app.include_router(employees.router, dependencies=_auth)
+app.include_router(skills.router, dependencies=_auth)
+app.include_router(talent_search.router, dependencies=_auth)
+app.include_router(orgs.router, dependencies=_auth)
 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -88,7 +137,7 @@ async def root():
 
 @app.get("/health", tags=["Health"])
 async def health():
-    """Health check — confirms the API is running and the DB pool is alive."""
+    """Health check — exempt from API key auth (used by CF health probes)."""
     from app.database import pool
 
     if pool is None:

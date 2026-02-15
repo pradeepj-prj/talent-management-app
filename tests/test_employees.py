@@ -40,7 +40,7 @@ class TestEmployeeSkillProfile:
             )
 
     async def test_404_for_unknown_employee(self, client):
-        resp = await client.get("/tm/employees/NOEXIST/skills")
+        resp = await client.get("/tm/employees/EMP999999/skills")
         assert resp.status_code == 404
         assert "not found" in resp.json()["detail"].lower()
 
@@ -114,5 +114,5 @@ class TestEvidenceInventory:
             assert "skill_name" in ev
 
     async def test_404_for_unknown_employee(self, client):
-        resp = await client.get("/tm/employees/NOEXIST/evidence")
+        resp = await client.get("/tm/employees/EMP999999/evidence")
         assert resp.status_code == 404

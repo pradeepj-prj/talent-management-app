@@ -37,7 +37,7 @@ class TestOrgSkillSummary:
             assert 0 <= skill["avg_proficiency"] <= 5
 
     async def test_404_for_unknown_org(self, client):
-        resp = await client.get("/tm/orgs/NOPE/skills/summary")
+        resp = await client.get("/tm/orgs/ORG999/skills/summary")
         assert resp.status_code == 404
 
 
@@ -70,7 +70,7 @@ class TestOrgSkillExperts:
             assert expert["org_name"] == "Product Dev - Software"
 
     async def test_404_for_unknown_org(self, client):
-        resp = await client.get(f"/tm/orgs/NOPE/skills/{PYTHON_SKILL_ID}/experts")
+        resp = await client.get(f"/tm/orgs/ORG999/skills/{PYTHON_SKILL_ID}/experts")
         assert resp.status_code == 404
 
     async def test_404_for_unknown_skill(self, client):

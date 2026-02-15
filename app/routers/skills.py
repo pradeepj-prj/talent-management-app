@@ -1,5 +1,6 @@
 """Skill-centric API routes (Endpoints 3, 4, 6, 7, 9, 11)."""
 
+from enum import Enum
 from typing import Annotated
 
 from asyncpg import Connection
@@ -21,14 +22,23 @@ router = APIRouter(prefix="/tm/skills", tags=["Skills"])
 DbConn = Annotated[Connection, Depends(get_connection)]
 
 
+class SkillCategory(str, Enum):
+    technical = "technical"
+    functional = "functional"
+    leadership = "leadership"
+    domain = "domain"
+    tool = "tool"
+    other = "other"
+
+
 @router.get("", response_model=SkillCatalogResponse)
 async def browse_skills(
     conn: DbConn,
-    category: str | None = Query(default=None, description="Filter by category (technical, functional, leadership, domain, tool, other)"),
-    search: str | None = Query(default=None, description="Search skill name or description (case-insensitive)"),
+    category: SkillCategory | None = Query(default=None, description="Filter by category"),
+    search: str | None = Query(default=None, max_length=200, description="Search skill name or description (case-insensitive)"),
 ):
     """**Endpoint 11** — Browse the skill taxonomy catalog with optional filters."""
-    return await svc.browse_skills(conn, category, search)
+    return await svc.browse_skills(conn, category.value if category else None, search)
 
 
 @router.get("/{skill_id}/experts", response_model=TopExpertsResponse)

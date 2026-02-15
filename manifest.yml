@@ -18,3 +18,5 @@ applications:
       DB_PASSWORD: ""
       DB_MIN_POOL: "2"
       DB_MAX_POOL: "5"
+      CORS_ORIGINS: '["https://tm-skills-api.cfapps.ap10.hana.ondemand.com"]'
+      # API_KEYS: set via `cf set-env` — never commit secrets

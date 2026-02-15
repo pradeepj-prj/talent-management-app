@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from asyncpg import Connection
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.database import get_connection
 from app.models.search import TalentSearchResponse
@@ -17,7 +17,7 @@ DbConn = Annotated[Connection, Depends(get_connection)]
 @router.get("/search", response_model=TalentSearchResponse)
 async def talent_search(
     conn: DbConn,
-    skills: str = Query(description="Comma-separated skill names (e.g., 'Python,SQL')"),
+    skills: str = Query(max_length=500, description="Comma-separated skill names (e.g., 'Python,SQL') — max 10 skills"),
     min_proficiency: int = Query(default=3, ge=0, le=5, description="Minimum proficiency for each skill"),
 ):
     """**Endpoint 5** — Find employees who have ALL specified skills at minimum proficiency.
@@ -25,4 +25,6 @@ async def talent_search(
     This is an AND search: only employees with every listed skill are returned.
     """
     skill_names = [s.strip() for s in skills.split(",") if s.strip()]
+    if len(skill_names) > 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 skills allowed per search")
     return await svc.multi_skill_search(conn, skill_names, min_proficiency)
