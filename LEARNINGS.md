@@ -165,24 +165,23 @@ Five files were added to the project root:
 
 ### First-Push Chicken-and-Egg Problem
 
-`cf set-env` requires the app to already exist, but the first `cf push` creates the app and starts it immediately. On first deploy with a blank `DB_PASSWORD` in manifest, the app crashes with `InvalidPasswordError`.
+`cf set-env` requires the app to already exist, but the first `cf push` creates the app and starts it immediately.
 
-**Solution:** After the first push, set the password and restart:
+**Solution:** `deploy.sh` handles this automatically:
 ```bash
-cf set-env tm-skills-api DB_PASSWORD "<password>"
-cf restart tm-skills-api
+cf push --no-start          # Create app without starting
+cf set-env ... DB_PASSWORD  # Set secrets
+cf set-env ... API_KEYS     # Set secrets
+cf start ...                # Start with secrets in place
 ```
 
-**Better alternative for future first deploys:**
-```bash
-cf push --no-start
-cf set-env tm-skills-api DB_PASSWORD "<password>"
-cf start tm-skills-api
-```
+### CF Manifest Overwrites `cf set-env` — Critical Gotcha
 
-### CF Environment Variable Precedence
+**`manifest.yml` env vars are applied on every `cf push`, overwriting anything previously set via `cf set-env`.**
 
-Env vars set via `cf set-env` **override** those in `manifest.yml`. So on subsequent `cf push` runs, the password persists — no need to re-set it. The blank `DB_PASSWORD` in the manifest serves as documentation, not a functional default.
+This caused a production crash: having `DB_PASSWORD: ""` in `manifest.yml` wiped the real password on every deploy. The fix: **never put secrets in `manifest.yml`**, even as empty placeholders. Secrets should only exist in `cf set-env` (managed by `deploy.sh`).
+
+This also applies to `API_KEYS` — the manifest would strip the key on each push if it were listed there.
 
 ### SAP BTP Network Considerations
 
@@ -190,6 +189,28 @@ The external PostgreSQL (AWS ap-southeast-1) is reachable from SAP BTP Cloud Fou
 - CF apps can make outbound connections to internet-accessible IPs.
 - The AWS security group must allow inbound on port 5432 from the CF NAT egress IPs.
 - If the DB were behind a private network, SAP Cloud Connector would be needed.
+
+### Automated Deployment Script
+
+`deploy.sh` solves the secret management problem for CF deployments:
+- Generates a random API key (`.api-key`) on first run — reuses it on subsequent deploys.
+- Prompts for DB password (`.db-password`) on first run — reuses it on subsequent deploys.
+- Both files are gitignored and cfignored.
+- `./deploy.sh --rotate` generates a new API key (invalidates the old one).
+- Handles `cf push --no-start` → `cf set-env` → `cf start` sequence automatically.
+
+### pydantic-settings and Complex Types
+
+`set[str]` as a pydantic-settings field type requires the env var to be a valid JSON array (e.g., `'["key1","key2"]'`). A plain string like `my-secret-key` fails parsing. The robust pattern: store as `str` and parse via a `@property`:
+```python
+api_keys: str = ""  # plain string, not set[str]
+
+@property
+def api_keys_set(self) -> set[str]:
+    if not self.api_keys:
+        return set()
+    return {k.strip() for k in self.api_keys.split(",") if k.strip()}
+```
 
 ### Resource Sizing
 
@@ -237,13 +258,42 @@ Both must be kept in sync. The `requirements.txt` intentionally omits dev/genera
 
 | Group | Packages | Purpose |
 |-------|----------|---------|
-| core | fastapi, uvicorn, asyncpg, pydantic-settings | Production runtime |
+| core | fastapi, uvicorn, asyncpg, pydantic-settings, slowapi | Production runtime |
 | dev | pytest, pytest-asyncio, httpx, ruff | Testing and linting |
 | generator | psycopg2-binary | Data generation script (sync driver) |
 
 ---
 
-## 8. Live Deployment
+## 8. Security Hardening Learnings
+
+### API Key Auth — Disabled by Default
+
+Auth is only enforced when `API_KEYS` is set. This preserves local dev convenience and keeps all 48 tests passing without modification. The dependency lives in `app/auth.py` and is applied per-router via `include_router(dependencies=...)`, not globally — this naturally exempts `/health` (needed by CF health probes), `/` (redirect), and static files.
+
+### CORS — Browser-Only Protection
+
+CORS only restricts browser-based JavaScript. `curl`, Postman, and scripts are unaffected. The wildcard `allow_origins=["*"]` + `allow_credentials=True` was dangerous because it lets any website's JS make credentialed requests. The fix restricts origins to the app's own domain and disables credentials (API keys are sent via header, not cookies).
+
+### Middleware Registration Order (Starlette)
+
+Starlette middleware executes in **reverse** registration order. The last `add_middleware()` call runs first (outermost). So:
+```python
+app.add_middleware(AccessLogMiddleware)    # outermost — sees final status
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(SlowAPIMiddleware)      # innermost — runs first
+```
+
+### FastAPI Global Dependencies Don't Support Per-Route Overrides
+
+`FastAPI(dependencies=[...])` applies to all routes. Setting `dependencies=[]` on a specific route is **additive**, not an override. To exempt routes, apply auth at the `include_router()` level instead.
+
+### Input Validation with `Annotated` Types
+
+Using `employee_id: str = Path(pattern=...)` forces all subsequent params to have defaults (Python syntax). The cleaner pattern: `Annotated[str, Path(pattern=...)]` embeds validation in the type annotation, preserving normal parameter order.
+
+---
+
+## 9. Live Deployment
 
 The app is deployed and accessible at:
 - **URL:** https://tm-skills-api.cfapps.ap10.hana.ondemand.com

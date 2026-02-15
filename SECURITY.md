@@ -1,6 +1,7 @@
 # Security Assessment — TM Skills API
 
-> **Date:** 2026-02-15
+> **Date:** 2026-02-15 (updated after deployment)
+> **Status:** All 6 remediation phases implemented and deployed
 > **Application:** Talent Management Skills API (FastAPI)
 > **Deployment:** Cloud Foundry on SAP BTP (ap10 region)
 > **Scope:** Read-only API — 12 GET endpoints serving employee talent/skill data
@@ -18,16 +19,16 @@
 | Stack Trace Suppression | ✅ Protected | Global `exception_handler(Exception)` returns generic `{"detail": "Internal server error"}` |
 | TLS in Transit | ✅ Protected | Cloud Foundry Go Router terminates TLS — all external traffic is HTTPS |
 
-### What's Missing
+### Implemented Controls
 
-| Control | Status | Risk | Details |
-|---------|--------|------|---------|
-| Authentication | ❌ None | **Critical** | Any client can read all endpoints — no API keys, tokens, or credentials required |
-| CORS Policy | ❌ Misconfigured | **High** | `allow_origins=["*"]` with `allow_credentials=True` — browsers will send cookies to any origin |
-| Security Headers | ❌ None | **Medium** | No `X-Frame-Options`, `HSTS`, `CSP`, `Cache-Control`, or `X-Content-Type-Options` |
-| Rate Limiting | ❌ None | **Medium** | DB pool max is 10 — a single client can exhaust all connections |
-| Audit Logging | ❌ None | **Medium** | No visibility into who accesses what data |
-| Input Format Validation | ❌ Minimal | **Low** | Employee/org IDs accept arbitrary strings — unnecessary DB queries for invalid formats |
+| Control | Status | Details |
+|---------|--------|---------|
+| Authentication | ✅ Implemented | API key via `X-API-Key` header — 401 if missing, 403 if invalid. Disabled when `API_KEYS` env var is empty. `/health` exempt for CF probes. |
+| CORS Policy | ✅ Hardened | Origins restricted to production domain, `allow_credentials=False`, methods limited to `GET, OPTIONS` |
+| Security Headers | ✅ Implemented | `X-Frame-Options: DENY`, `HSTS`, `CSP`, `Cache-Control: no-store`, `X-Content-Type-Options: nosniff`, `Referrer-Policy` |
+| Rate Limiting | ✅ Implemented | 60 requests/minute per client IP via `slowapi`, `X-Forwarded-For` aware for CF Go Router |
+| Audit Logging | ✅ Implemented | Structured access logs: method, path, status, duration, client IP, masked API key |
+| Input Format Validation | ✅ Implemented | Regex on employee IDs (`^EMP\d{6}$`), org IDs (`^ORG\d{1,4}[A-Z]?$`), skill category enum, search length caps |
 
 ---
 
@@ -64,35 +65,44 @@ The API exposes **employee talent management data** — this is sensitive HR/PII
 ```
 Internet → CF Go Router (TLS) → FastAPI App → asyncpg → PostgreSQL
                                      ↑
-                              No auth barrier here
+                              API Key auth barrier
+                              Rate limiting (60/min)
+                              Security headers
+                              Access logging
 ```
 
 ### Threat Scenarios
 
-| # | Threat | Likelihood | Impact | Current Mitigation |
-|---|--------|-----------|--------|-------------------|
-| T1 | **Unauthenticated data exfiltration** — Attacker scrapes all employee skill data via sequential ID enumeration | High | High | None — all endpoints are public |
-| T2 | **CORS credential theft** — Malicious site makes cross-origin requests with user cookies | Medium | High | None — CORS allows all origins with credentials |
-| T3 | **DB pool exhaustion (DoS)** — Automated requests exhaust the 10-connection pool | Medium | Medium | None — no rate limiting |
-| T4 | **Clickjacking** — API explorer embedded in malicious iframe | Low | Low | None — no `X-Frame-Options` header |
-| T5 | **Response caching** — Proxies/browsers cache sensitive employee data | Low | Medium | None — no `Cache-Control: no-store` |
-| T6 | **Employee ID enumeration** — Sequential `EMP000001`, `EMP000002`... pattern is guessable | Medium | Medium | None — IDs are predictable and no auth required |
-| T7 | **Information leakage via headers** — Server version, framework details | Low | Low | FastAPI doesn't leak much by default |
+| # | Threat | Likelihood | Impact | Mitigation |
+|---|--------|-----------|--------|------------|
+| T1 | **Unauthenticated data exfiltration** | High | High | ✅ API key required on all data endpoints (Phase 2) |
+| T2 | **CORS credential theft** | Medium | High | ✅ Origins restricted, credentials disabled (Phase 1) |
+| T3 | **DB pool exhaustion (DoS)** | Medium | Medium | ✅ 60/min rate limit per client IP (Phase 4) |
+| T4 | **Clickjacking** | Low | Low | ✅ `X-Frame-Options: DENY` + `frame-ancestors 'none'` (Phase 3) |
+| T5 | **Response caching of PII** | Low | Medium | ✅ `Cache-Control: no-store` (Phase 3) |
+| T6 | **Employee ID enumeration** | Medium | Medium | ✅ API key required + input validation rejects invalid formats (Phases 2, 6) |
+| T7 | **Information leakage via headers** | Low | Low | ✅ Security headers added, stack traces suppressed (Phase 3) |
 
 ---
 
-## 4. Remediation Plan
+## 4. Remediation Status
 
-Six implementation phases, each a single reviewable commit:
+All six phases implemented and deployed:
 
-| Phase | What | Addresses |
-|-------|------|-----------|
-| **Phase 1** | CORS Hardening | T2 — restrict origins, disable credentials, limit methods |
-| **Phase 2** | API Key Authentication | T1, T6 — require `X-API-Key` header for all endpoints |
-| **Phase 3** | Security Response Headers | T4, T5, T7 — add `X-Frame-Options`, `HSTS`, `CSP`, `Cache-Control` |
-| **Phase 4** | Rate Limiting | T3 — per-client request throttling via `slowapi` |
-| **Phase 5** | Request Logging / Audit Trail | All — structured access logs with masked API keys |
-| **Phase 6** | Input Validation Hardening | T6 — regex patterns on `employee_id`, `org_unit_id` |
+| Phase | What | Status | Addresses |
+|-------|------|--------|-----------|
+| **Phase 1** | CORS Hardening | ✅ Done | T2 — config-driven origins, credentials disabled, methods restricted |
+| **Phase 2** | API Key Authentication | ✅ Done | T1, T6 — `X-API-Key` header, disabled by default, `/health` exempt |
+| **Phase 3** | Security Response Headers | ✅ Done | T4, T5, T7 — 6 headers via `SecurityHeadersMiddleware` |
+| **Phase 4** | Rate Limiting | ✅ Done | T3 — `slowapi` at 60/min, `X-Forwarded-For` aware |
+| **Phase 5** | Request Logging / Audit Trail | ✅ Done | All — structured `key=value` access logs |
+| **Phase 6** | Input Validation Hardening | ✅ Done | T6 — regex on IDs, category enum, length caps |
+
+### Deployment Notes
+
+- Secrets managed via `deploy.sh` — generates API key, prompts for DB password
+- `manifest.yml` must NOT contain secrets (overwrites `cf set-env` on every `cf push`)
+- `./deploy.sh --rotate` to generate a new API key
 
 ---
 

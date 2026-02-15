@@ -21,18 +21,22 @@ The TM Skills API is **fully implemented and deployed**. See LEARNINGS.md for de
 - **Database driver:** asyncpg (async, binary protocol, positional params `$1, $2`)
 - **Configuration:** pydantic-settings (reads .env locally, env vars in production)
 - **Database:** PostgreSQL `hr_data` database, `tm` schema (separate from HR `public` schema)
+- **Security:** API key auth, CORS whitelist, rate limiting (slowapi), security headers, access logging
 - **Tests:** pytest + pytest-asyncio + httpx (48 integration tests against real DB)
 
 ### Architecture
 ```
-app/routers/   → HTTP endpoint definitions (4 routers: employees, skills, talent_search, orgs)
-app/services/  → Business logic and data transformation
-app/queries/   → Raw SQL with asyncpg $1 positional parameters
-app/models/    → Pydantic response schemas
-app/static/    → Interactive API explorer (index.html)
-app/config.py  → pydantic-settings (DB connection config)
-app/database.py → asyncpg pool management (search_path: tm,public)
-scripts/       → generate_tm_data.py (uses psycopg2, not asyncpg)
+app/routers/       → HTTP endpoint definitions (4 routers: employees, skills, talent_search, orgs)
+app/services/      → Business logic and data transformation
+app/queries/       → Raw SQL with asyncpg $1 positional parameters
+app/models/        → Pydantic response schemas
+app/auth.py        → API key authentication dependency (X-API-Key header)
+app/middleware/     → AccessLogMiddleware (structured request logging)
+app/static/        → Interactive API explorer (index.html) with API key input
+app/config.py      → pydantic-settings (DB, CORS, auth, rate limiting config)
+app/database.py    → asyncpg pool management (search_path: tm,public)
+scripts/           → generate_tm_data.py (uses psycopg2, not asyncpg)
+deploy.sh          → CF deployment script with auto-generated API key
 ```
 
 ### Key Conventions
@@ -40,15 +44,19 @@ scripts/       → generate_tm_data.py (uses psycopg2, not asyncpg)
 - asyncpg uses `$1, $2` positional parameters (prepared statements), not `%s` or `:name`.
 - The `tm` schema `search_path` is set at pool level — SQL queries don't need schema prefixes.
 - Tests run against the real database (no mocks). Data must be generated first with `scripts/generate_tm_data.py --seed 42`.
+- Secrets (`DB_PASSWORD`, `API_KEYS`) must **never** go in `manifest.yml` — they are set via `cf set-env` or `deploy.sh`.
+- `pydantic-settings` cannot parse `set[str]` from plain env var strings — use `str` field + `@property` to parse comma-separated values.
 
 ### Deployment (Cloud Foundry — SAP BTP)
 - **Live URL:** https://tm-skills-api.cfapps.ap10.hana.ondemand.com
 - **CF org/space:** SEAIO_dial-3-0-zme762l7 / dev
-- **Deployment files:** Procfile, manifest.yml, requirements.txt, runtime.txt, .cfignore
-- **DB password:** Set via `cf set-env` (not in manifest.yml — never commit secrets)
-- **Health check:** HTTP on `/health` endpoint
-- To redeploy: `cf push` (password persists across pushes)
-- To deploy fresh: `cf push --no-start && cf set-env tm-skills-api DB_PASSWORD "<pw>" && cf start tm-skills-api`
+- **Deployment files:** Procfile, manifest.yml, requirements.txt, runtime.txt, .cfignore, deploy.sh
+- **Secrets:** `DB_PASSWORD` and `API_KEYS` set via `cf set-env` (never in manifest.yml)
+- **Health check:** HTTP on `/health` endpoint (exempt from API key auth)
+- **Deploy:** `./deploy.sh` (generates API key on first run, prompts for DB password, handles `cf push` + `cf set-env`)
+- **Rotate API key:** `./deploy.sh --rotate`
+- **Local secret files:** `.api-key` and `.db-password` (both gitignored and cfignored)
+- **IMPORTANT:** `manifest.yml` must NOT contain `DB_PASSWORD` — `cf push` applies the manifest and overwrites any value previously set via `cf set-env`
 
 ### Database Connection
 - **Host:** 13.228.165.215 (AWS ap-southeast-1)
