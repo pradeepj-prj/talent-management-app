@@ -13,13 +13,13 @@ async def require_api_key(
 ) -> str | None:
     """Validate the X-API-Key header.
 
-    When ``settings.api_keys`` is empty, authentication is disabled —
+    When ``settings.api_keys_set`` is empty, authentication is disabled —
     this preserves local-dev convenience and keeps tests passing without
     modification.  Auth is only enforced when keys are configured via
     the ``API_KEYS`` environment variable.
     """
     # Auth disabled — no keys configured
-    if not settings.api_keys:
+    if not settings.api_keys_set:
         return None
 
     if not api_key:
@@ -28,7 +28,7 @@ async def require_api_key(
             detail="Missing API key — include an X-API-Key header",
         )
 
-    if api_key not in settings.api_keys:
+    if api_key not in settings.api_keys_set:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API key",

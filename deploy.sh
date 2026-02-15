@@ -2,16 +2,20 @@
 # Deploy tm-skills-api to Cloud Foundry with auto-generated API key.
 #
 # Usage:
-#   ./deploy.sh              # Deploy (generates key on first run)
-#   ./deploy.sh --rotate     # Generate a new key and redeploy
+#   ./deploy.sh              # Deploy (generates API key on first run)
+#   ./deploy.sh --rotate     # Generate a new API key and redeploy
 #
-# The API key is stored in .api-key (gitignored). On first deploy it is
-# generated automatically. On subsequent deploys the existing key is reused.
+# Secrets are stored locally in gitignored files:
+#   .api-key      — API key for X-API-Key auth
+#   .db-password   — Database password
+#
+# On first deploy you will be prompted for the DB password.
 
 set -euo pipefail
 
 APP_NAME="tm-skills-api"
 KEY_FILE=".api-key"
+DB_PW_FILE=".db-password"
 
 # ── Handle --rotate flag ────────────────────────────────────────────────────
 if [[ "${1:-}" == "--rotate" ]]; then
@@ -19,7 +23,7 @@ if [[ "${1:-}" == "--rotate" ]]; then
     rm -f "$KEY_FILE"
 fi
 
-# ── Generate key if needed ──────────────────────────────────────────────────
+# ── Generate API key if needed ──────────────────────────────────────────────
 if [ ! -f "$KEY_FILE" ]; then
     python3 -c "import secrets; print(secrets.token_urlsafe(32))" > "$KEY_FILE"
     echo "Generated new API key. Save this somewhere safe:"
@@ -27,18 +31,25 @@ if [ ! -f "$KEY_FILE" ]; then
     echo ""
 fi
 
+# ── Get DB password ─────────────────────────────────────────────────────────
+if [ ! -f "$DB_PW_FILE" ]; then
+    echo -n "Enter DB password (first-time setup): "
+    read -rs DB_PASSWORD
+    echo ""
+    echo "$DB_PASSWORD" > "$DB_PW_FILE"
+    echo "DB password saved to $DB_PW_FILE (gitignored)."
+fi
+
 API_KEY=$(cat "$KEY_FILE")
+DB_PASSWORD=$(cat "$DB_PW_FILE")
 
 # ── Deploy ──────────────────────────────────────────────────────────────────
 echo "Deploying $APP_NAME..."
 cf push --no-start
 
-echo "Setting API_KEYS..."
+echo "Setting secrets..."
 cf set-env "$APP_NAME" API_KEYS "$API_KEY"
-
-echo "Setting DB_PASSWORD..."
-# DB_PASSWORD must already be in CF env from a previous deploy, or set it:
-#   cf set-env tm-skills-api DB_PASSWORD "your-db-password"
+cf set-env "$APP_NAME" DB_PASSWORD "$DB_PASSWORD"
 
 echo "Starting $APP_NAME..."
 cf start "$APP_NAME"

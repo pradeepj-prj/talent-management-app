@@ -21,11 +21,18 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:8000", "http://localhost:3000"]
 
     # API Key authentication — comma-separated keys; empty = auth disabled
-    api_keys: set[str] = set()
+    api_keys: str = ""
 
     # Rate limiting
     rate_limit_enabled: bool = True
     rate_limit_default: str = "60/minute"
+
+    @property
+    def api_keys_set(self) -> set[str]:
+        """Parse comma-separated API_KEYS string into a set."""
+        if not self.api_keys:
+            return set()
+        return {k.strip() for k in self.api_keys.split(",") if k.strip()}
 
     @property
     def dsn(self) -> str:

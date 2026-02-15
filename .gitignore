@@ -19,6 +19,7 @@ env/
 # Environment
 .env
 .api-key
+.db-password
 
 # Testing
 .pytest_cache/

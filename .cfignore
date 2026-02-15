@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .env
 .api-key
+.db-password
 deploy.sh
 tests/
 scripts/
