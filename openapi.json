@@ -1,0 +1,1546 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Talent Management Skills API",
+    "description": "API for querying employee skills, proficiency levels, evidence, skill coverage, talent search, and organizational skill analytics. Built on a PostgreSQL talent management database with hand-written SQL queries.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "TM Skills API"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://tm-skills-api.cfapps.ap10.hana.ondemand.com",
+      "description": "Production (SAP BTP Cloud Foundry)"
+    },
+    {
+      "url": "http://localhost:8000",
+      "description": "Local development"
+    }
+  ],
+  "security": [
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Employees",
+      "description": "Employee skill profiles, top skills, and evidence"
+    },
+    {
+      "name": "Skills",
+      "description": "Skill catalog, experts, coverage, candidates, staleness, and co-occurrence"
+    },
+    {
+      "name": "Talent Search",
+      "description": "Multi-skill AND search across employees"
+    },
+    {
+      "name": "Organizations",
+      "description": "Org-level skill summaries and expert lookup"
+    },
+    {
+      "name": "Health",
+      "description": "Health check (no authentication required)"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "description": "Returns API and database health status. Exempt from API key authentication.",
+        "operationId": "getHealth",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "ok"
+                    },
+                    "db": {
+                      "type": "string",
+                      "example": "ok"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/tm/employees/{employee_id}/skills": {
+      "get": {
+        "tags": ["Employees"],
+        "summary": "Get employee skill profile",
+        "description": "What skills does this employee have, at what proficiency and confidence?",
+        "operationId": "getEmployeeSkills",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "description": "Employee ID (e.g. EMP000001)",
+            "schema": {
+              "type": "string",
+              "pattern": "^EMP\\d{6}$",
+              "example": "EMP000001"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Employee skill profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeSkillProfile"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/employees/{employee_id}/skills/{skill_id}/evidence": {
+      "get": {
+        "tags": ["Employees"],
+        "summary": "Get skill evidence for employee",
+        "description": "Why do we think this employee is proficient in this skill? Returns all evidence items.",
+        "operationId": "getEmployeeSkillEvidence",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "description": "Employee ID (e.g. EMP000001)",
+            "schema": {
+              "type": "string",
+              "pattern": "^EMP\\d{6}$",
+              "example": "EMP000001"
+            }
+          },
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "description": "Skill ID",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Skill evidence for the employee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillEvidenceResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/employees/{employee_id}/top-skills": {
+      "get": {
+        "tags": ["Employees"],
+        "summary": "Get employee's strongest skills",
+        "description": "Skill passport: what are this employee's strongest skills?",
+        "operationId": "getEmployeeTopSkills",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "description": "Employee ID (e.g. EMP000001)",
+            "schema": {
+              "type": "string",
+              "pattern": "^EMP\\d{6}$",
+              "example": "EMP000001"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Number of top skills to return",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Employee's top skills",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeTopSkills"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/employees/{employee_id}/evidence": {
+      "get": {
+        "tags": ["Employees"],
+        "summary": "Get all evidence for employee",
+        "description": "All evidence items across all skills for this employee.",
+        "operationId": "getEmployeeEvidence",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "description": "Employee ID (e.g. EMP000001)",
+            "schema": {
+              "type": "string",
+              "pattern": "^EMP\\d{6}$",
+              "example": "EMP000001"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "All evidence for the employee",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmployeeEvidenceInventory"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/skills": {
+      "get": {
+        "tags": ["Skills"],
+        "summary": "Browse skill catalog",
+        "description": "Browse the skill taxonomy catalog with optional filters by category or search term.",
+        "operationId": "getSkillCatalog",
+        "parameters": [
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "description": "Filter by skill category",
+            "schema": {
+              "type": "string",
+              "enum": ["technical", "functional", "leadership", "domain", "tool", "other"]
+            }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Search skill name or description (case-insensitive)",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Skill catalog results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillCatalogResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/tm/skills/{skill_id}/experts": {
+      "get": {
+        "tags": ["Skills"],
+        "summary": "Get top experts for a skill",
+        "description": "Who are the top experts in this skill?",
+        "operationId": "getSkillExperts",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "description": "Skill ID",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          },
+          {
+            "name": "min_proficiency",
+            "in": "query",
+            "required": false,
+            "description": "Minimum proficiency level",
+            "schema": {
+              "type": "integer",
+              "default": 4,
+              "minimum": 0,
+              "maximum": 5
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Max results to return",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top experts for the skill",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopExpertsResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/skills/{skill_id}/coverage": {
+      "get": {
+        "tags": ["Skills"],
+        "summary": "Get skill coverage and proficiency distribution",
+        "description": "How many employees have this skill? Returns a proficiency distribution histogram.",
+        "operationId": "getSkillCoverage",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "description": "Skill ID",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          },
+          {
+            "name": "min_proficiency",
+            "in": "query",
+            "required": false,
+            "description": "Minimum proficiency for coverage count",
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 0,
+              "maximum": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Skill coverage and distribution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillCoverageResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/skills/{skill_id}/candidates": {
+      "get": {
+        "tags": ["Skills"],
+        "summary": "Get evidence-backed candidates for a skill",
+        "description": "Who has this skill with strong evidence to back it up?",
+        "operationId": "getSkillCandidates",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "description": "Skill ID",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          },
+          {
+            "name": "min_proficiency",
+            "in": "query",
+            "required": false,
+            "description": "Minimum proficiency level",
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 0,
+              "maximum": 5
+            }
+          },
+          {
+            "name": "min_evidence_strength",
+            "in": "query",
+            "required": false,
+            "description": "Minimum evidence signal strength",
+            "schema": {
+              "type": "integer",
+              "default": 4,
+              "minimum": 1,
+              "maximum": 5
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Max candidates to return",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evidence-backed candidates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceBackedResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/skills/{skill_id}/stale": {
+      "get": {
+        "tags": ["Skills"],
+        "summary": "Get employees with stale skill records",
+        "description": "Which employees have this skill but it hasn't been validated recently?",
+        "operationId": "getStaleSkills",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "description": "Skill ID",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          },
+          {
+            "name": "older_than_days",
+            "in": "query",
+            "required": false,
+            "description": "Skills not updated in this many days",
+            "schema": {
+              "type": "integer",
+              "default": 365,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Employees with stale skill records",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StaleSkillsResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/skills/{skill_id}/cooccurring": {
+      "get": {
+        "tags": ["Skills"],
+        "summary": "Get co-occurring skills",
+        "description": "For employees strong in this skill, what other skills do they commonly have?",
+        "operationId": "getCooccurringSkills",
+        "parameters": [
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "description": "Skill ID",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          },
+          {
+            "name": "min_proficiency",
+            "in": "query",
+            "required": false,
+            "description": "Minimum proficiency to consider",
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 0,
+              "maximum": 5
+            }
+          },
+          {
+            "name": "top",
+            "in": "query",
+            "required": false,
+            "description": "Number of co-occurring skills to return",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Co-occurring skills",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SkillAdjacencyResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/talent/search": {
+      "get": {
+        "tags": ["Talent Search"],
+        "summary": "Search employees by multiple skills",
+        "description": "Find employees who have ALL specified skills at minimum proficiency. This is an AND search: only employees with every listed skill are returned.",
+        "operationId": "searchTalent",
+        "parameters": [
+          {
+            "name": "skills",
+            "in": "query",
+            "required": true,
+            "description": "Comma-separated skill names (e.g. 'Python,SQL'). Maximum 10 skills.",
+            "schema": {
+              "type": "string",
+              "maxLength": 500,
+              "example": "Python,SQL"
+            }
+          },
+          {
+            "name": "min_proficiency",
+            "in": "query",
+            "required": false,
+            "description": "Minimum proficiency for each skill",
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 0,
+              "maximum": 5
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching employees",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TalentSearchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Too many skills (max 10)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/tm/orgs/{org_unit_id}/skills/summary": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Get org unit skill summary",
+        "description": "What are the top skills in this org unit (including child orgs)?",
+        "operationId": "getOrgSkillSummary",
+        "parameters": [
+          {
+            "name": "org_unit_id",
+            "in": "path",
+            "required": true,
+            "description": "Org unit ID (e.g. ORG030 or ORG031B)",
+            "schema": {
+              "type": "string",
+              "pattern": "^ORG\\d{1,4}[A-Z]?$",
+              "example": "ORG030"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Number of top skills to return",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Org skill summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgSkillSummaryResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/tm/orgs/{org_unit_id}/skills/{skill_id}/experts": {
+      "get": {
+        "tags": ["Organizations"],
+        "summary": "Get skill experts within an org unit",
+        "description": "Who in this org unit has this skill at minimum proficiency?",
+        "operationId": "getOrgSkillExperts",
+        "parameters": [
+          {
+            "name": "org_unit_id",
+            "in": "path",
+            "required": true,
+            "description": "Org unit ID (e.g. ORG030 or ORG031B)",
+            "schema": {
+              "type": "string",
+              "pattern": "^ORG\\d{1,4}[A-Z]?$",
+              "example": "ORG030"
+            }
+          },
+          {
+            "name": "skill_id",
+            "in": "path",
+            "required": true,
+            "description": "Skill ID",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          },
+          {
+            "name": "min_proficiency",
+            "in": "query",
+            "required": false,
+            "description": "Minimum proficiency level",
+            "schema": {
+              "type": "integer",
+              "default": 3,
+              "minimum": 0,
+              "maximum": 5
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Max results",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Skill experts in the org",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrgSkillExpertsResponse"
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "API key for authentication. Pass in the X-API-Key header."
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Missing API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "detail": "Missing API key — include an X-API-Key header"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Invalid API key",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "detail": "Invalid API key"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorResponse"
+            },
+            "example": {
+              "detail": "Employee not found"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "detail": {
+            "type": "string",
+            "description": "Error message"
+          }
+        },
+        "required": ["detail"]
+      },
+      "EmployeeRef": {
+        "type": "object",
+        "description": "Basic employee reference information",
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "description": "Employee ID",
+            "example": "EMP000001"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Employee display name"
+          },
+          "job_title": {
+            "type": "string",
+            "nullable": true,
+            "description": "Current job title"
+          },
+          "job_family": {
+            "type": "string",
+            "nullable": true,
+            "description": "Job family"
+          },
+          "org_name": {
+            "type": "string",
+            "nullable": true,
+            "description": "Organization name"
+          },
+          "seniority_level": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Seniority level"
+          }
+        },
+        "required": ["employee_id"]
+      },
+      "SkillInfo": {
+        "type": "object",
+        "description": "Basic skill information",
+        "properties": {
+          "skill_id": {
+            "type": "integer",
+            "description": "Skill ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Skill name"
+          },
+          "category": {
+            "type": "string",
+            "description": "Skill category (technical, functional, leadership, domain, tool, other)"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "Skill description"
+          }
+        },
+        "required": ["skill_id", "name", "category"]
+      },
+      "EmployeeSkillEntry": {
+        "type": "object",
+        "description": "A single skill entry for an employee",
+        "properties": {
+          "skill_id": {
+            "type": "integer",
+            "description": "Skill ID"
+          },
+          "skill_name": {
+            "type": "string",
+            "description": "Skill name"
+          },
+          "category": {
+            "type": "string",
+            "description": "Skill category"
+          },
+          "proficiency": {
+            "type": "integer",
+            "description": "Proficiency level (0-5)"
+          },
+          "confidence": {
+            "type": "integer",
+            "description": "Confidence score"
+          },
+          "source": {
+            "type": "string",
+            "description": "Source of the skill assessment"
+          },
+          "last_updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the skill was last updated"
+          }
+        },
+        "required": ["skill_id", "skill_name", "category", "proficiency", "confidence", "source", "last_updated_at"]
+      },
+      "EvidenceItem": {
+        "type": "object",
+        "description": "A single piece of evidence supporting a skill assessment",
+        "properties": {
+          "evidence_id": {
+            "type": "integer",
+            "description": "Evidence ID"
+          },
+          "evidence_type": {
+            "type": "string",
+            "description": "Type of evidence (e.g. certification, project, training)"
+          },
+          "title": {
+            "type": "string",
+            "description": "Evidence title"
+          },
+          "issuer_or_system": {
+            "type": "string",
+            "nullable": true,
+            "description": "Issuing organization or system"
+          },
+          "evidence_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true,
+            "description": "Date of the evidence"
+          },
+          "url_or_ref": {
+            "type": "string",
+            "nullable": true,
+            "description": "URL or reference"
+          },
+          "signal_strength": {
+            "type": "integer",
+            "description": "Evidence signal strength (1-5)"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true,
+            "description": "Additional notes"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the evidence was recorded"
+          }
+        },
+        "required": ["evidence_id", "evidence_type", "title", "signal_strength", "created_at"]
+      },
+      "EvidenceWithSkill": {
+        "type": "object",
+        "description": "Evidence item with associated skill information",
+        "allOf": [
+          { "$ref": "#/components/schemas/EvidenceItem" },
+          {
+            "type": "object",
+            "properties": {
+              "skill_id": {
+                "type": "integer",
+                "description": "Associated skill ID"
+              },
+              "skill_name": {
+                "type": "string",
+                "description": "Associated skill name"
+              }
+            },
+            "required": ["skill_id", "skill_name"]
+          }
+        ]
+      },
+      "EmployeeSkillProfile": {
+        "type": "object",
+        "description": "Complete skill profile for an employee",
+        "properties": {
+          "employee": {
+            "$ref": "#/components/schemas/EmployeeRef"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeSkillEntry"
+            }
+          },
+          "total_skills": {
+            "type": "integer",
+            "description": "Total number of skills"
+          }
+        },
+        "required": ["employee", "skills", "total_skills"]
+      },
+      "SkillEvidenceResponse": {
+        "type": "object",
+        "description": "Evidence for a specific skill of an employee",
+        "properties": {
+          "employee": {
+            "$ref": "#/components/schemas/EmployeeRef"
+          },
+          "skill_id": {
+            "type": "integer"
+          },
+          "skill_name": {
+            "type": "string"
+          },
+          "proficiency": {
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "integer"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            }
+          }
+        },
+        "required": ["employee", "skill_id", "skill_name", "proficiency", "confidence", "evidence"]
+      },
+      "EmployeeTopSkills": {
+        "type": "object",
+        "description": "Employee's top/strongest skills",
+        "properties": {
+          "employee": {
+            "$ref": "#/components/schemas/EmployeeRef"
+          },
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EmployeeSkillEntry"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Limit applied"
+          }
+        },
+        "required": ["employee", "skills", "limit"]
+      },
+      "EmployeeEvidenceInventory": {
+        "type": "object",
+        "description": "All evidence across all skills for an employee",
+        "properties": {
+          "employee": {
+            "$ref": "#/components/schemas/EmployeeRef"
+          },
+          "evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceWithSkill"
+            }
+          },
+          "total_items": {
+            "type": "integer",
+            "description": "Total evidence items"
+          }
+        },
+        "required": ["employee", "evidence", "total_items"]
+      },
+      "SkillCatalogResponse": {
+        "type": "object",
+        "description": "Skill catalog listing",
+        "properties": {
+          "skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillInfo"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "description": "Total skills matching the filter"
+          }
+        },
+        "required": ["skills", "total"]
+      },
+      "SkillExpert": {
+        "type": "object",
+        "description": "An expert for a particular skill",
+        "properties": {
+          "employee_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "job_title": {
+            "type": "string",
+            "nullable": true
+          },
+          "org_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "proficiency": {
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "integer"
+          },
+          "last_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["employee_id", "proficiency", "confidence", "last_updated_at"]
+      },
+      "TopExpertsResponse": {
+        "type": "object",
+        "description": "Top experts for a skill",
+        "properties": {
+          "skill": {
+            "$ref": "#/components/schemas/SkillInfo"
+          },
+          "experts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkillExpert"
+            }
+          },
+          "min_proficiency": {
+            "type": "integer"
+          },
+          "total_matching": {
+            "type": "integer"
+          }
+        },
+        "required": ["skill", "experts", "min_proficiency", "total_matching"]
+      },
+      "ProficiencyBucket": {
+        "type": "object",
+        "description": "A proficiency level and its employee count",
+        "properties": {
+          "proficiency": {
+            "type": "integer",
+            "description": "Proficiency level (0-5)"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of employees at this level"
+          }
+        },
+        "required": ["proficiency", "count"]
+      },
+      "SkillCoverageResponse": {
+        "type": "object",
+        "description": "Skill coverage and proficiency distribution",
+        "properties": {
+          "skill": {
+            "$ref": "#/components/schemas/SkillInfo"
+          },
+          "total_employees": {
+            "type": "integer",
+            "description": "Total employees with this skill"
+          },
+          "employees_at_min": {
+            "type": "integer",
+            "description": "Employees at or above min proficiency"
+          },
+          "min_proficiency": {
+            "type": "integer"
+          },
+          "distribution": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProficiencyBucket"
+            }
+          }
+        },
+        "required": ["skill", "total_employees", "employees_at_min", "min_proficiency", "distribution"]
+      },
+      "EvidenceBackedCandidate": {
+        "type": "object",
+        "description": "A candidate with evidence supporting their skill",
+        "properties": {
+          "employee_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "job_title": {
+            "type": "string",
+            "nullable": true
+          },
+          "proficiency": {
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "integer"
+          },
+          "top_evidence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceItem"
+            }
+          }
+        },
+        "required": ["employee_id", "proficiency", "confidence", "top_evidence"]
+      },
+      "EvidenceBackedResponse": {
+        "type": "object",
+        "description": "Evidence-backed candidates for a skill",
+        "properties": {
+          "skill": {
+            "$ref": "#/components/schemas/SkillInfo"
+          },
+          "candidates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EvidenceBackedCandidate"
+            }
+          },
+          "min_proficiency": {
+            "type": "integer"
+          },
+          "min_evidence_strength": {
+            "type": "integer"
+          }
+        },
+        "required": ["skill", "candidates", "min_proficiency", "min_evidence_strength"]
+      },
+      "StaleSkillEntry": {
+        "type": "object",
+        "description": "An employee with a stale skill record",
+        "properties": {
+          "employee_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "job_title": {
+            "type": "string",
+            "nullable": true
+          },
+          "proficiency": {
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "integer"
+          },
+          "last_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "days_since_update": {
+            "type": "integer",
+            "description": "Number of days since last update"
+          }
+        },
+        "required": ["employee_id", "proficiency", "confidence", "last_updated_at", "days_since_update"]
+      },
+      "StaleSkillsResponse": {
+        "type": "object",
+        "description": "Employees with stale skill records",
+        "properties": {
+          "skill": {
+            "$ref": "#/components/schemas/SkillInfo"
+          },
+          "stale_entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StaleSkillEntry"
+            }
+          },
+          "older_than_days": {
+            "type": "integer"
+          },
+          "total_stale": {
+            "type": "integer"
+          }
+        },
+        "required": ["skill", "stale_entries", "older_than_days", "total_stale"]
+      },
+      "CooccurringSkill": {
+        "type": "object",
+        "description": "A skill that commonly co-occurs with the queried skill",
+        "properties": {
+          "skill_id": {
+            "type": "integer"
+          },
+          "skill_name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "co_occurrence_count": {
+            "type": "integer",
+            "description": "Number of employees who have both skills"
+          }
+        },
+        "required": ["skill_id", "skill_name", "category", "co_occurrence_count"]
+      },
+      "SkillAdjacencyResponse": {
+        "type": "object",
+        "description": "Co-occurring skills for employees strong in a given skill",
+        "properties": {
+          "skill": {
+            "$ref": "#/components/schemas/SkillInfo"
+          },
+          "min_proficiency": {
+            "type": "integer"
+          },
+          "cooccurring": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CooccurringSkill"
+            }
+          }
+        },
+        "required": ["skill", "min_proficiency", "cooccurring"]
+      },
+      "MatchedSkill": {
+        "type": "object",
+        "description": "A skill matched in a talent search result",
+        "properties": {
+          "skill_id": {
+            "type": "integer"
+          },
+          "skill_name": {
+            "type": "string"
+          },
+          "proficiency": {
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "integer"
+          },
+          "source": {
+            "type": "string"
+          },
+          "last_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["skill_id", "skill_name", "proficiency", "confidence", "source", "last_updated_at"]
+      },
+      "TalentSearchHit": {
+        "type": "object",
+        "description": "An employee matching all search criteria",
+        "properties": {
+          "employee_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "job_title": {
+            "type": "string",
+            "nullable": true
+          },
+          "org_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "seniority_level": {
+            "type": "integer",
+            "nullable": true
+          },
+          "matched_skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MatchedSkill"
+            }
+          }
+        },
+        "required": ["employee_id", "matched_skills"]
+      },
+      "TalentSearchQuery": {
+        "type": "object",
+        "description": "The parsed talent search query",
+        "properties": {
+          "skill_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "min_proficiency": {
+            "type": "integer"
+          },
+          "results_count": {
+            "type": "integer"
+          }
+        },
+        "required": ["skill_names", "min_proficiency", "results_count"]
+      },
+      "TalentSearchResponse": {
+        "type": "object",
+        "description": "Talent search results",
+        "properties": {
+          "query": {
+            "$ref": "#/components/schemas/TalentSearchQuery"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TalentSearchHit"
+            }
+          }
+        },
+        "required": ["query", "results"]
+      },
+      "OrgRef": {
+        "type": "object",
+        "description": "Organization unit reference",
+        "properties": {
+          "org_id": {
+            "type": "string",
+            "description": "Org unit ID"
+          },
+          "org_name": {
+            "type": "string",
+            "description": "Organization name"
+          },
+          "business_unit": {
+            "type": "string",
+            "nullable": true,
+            "description": "Business unit"
+          }
+        },
+        "required": ["org_id", "org_name"]
+      },
+      "OrgSkillSummaryEntry": {
+        "type": "object",
+        "description": "A skill summary entry for an org unit",
+        "properties": {
+          "skill_id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "employee_count": {
+            "type": "integer",
+            "description": "Number of employees with this skill"
+          },
+          "avg_proficiency": {
+            "type": "number",
+            "format": "float",
+            "description": "Average proficiency level"
+          }
+        },
+        "required": ["skill_id", "name", "category", "employee_count", "avg_proficiency"]
+      },
+      "OrgSkillSummaryResponse": {
+        "type": "object",
+        "description": "Org unit skill summary including child orgs",
+        "properties": {
+          "org": {
+            "$ref": "#/components/schemas/OrgRef"
+          },
+          "includes_children": {
+            "type": "boolean",
+            "description": "Whether child org units are included"
+          },
+          "total_profiled_employees": {
+            "type": "integer",
+            "description": "Total employees with skill profiles in this org"
+          },
+          "top_skills": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrgSkillSummaryEntry"
+            }
+          }
+        },
+        "required": ["org", "includes_children", "total_profiled_employees", "top_skills"]
+      },
+      "OrgSkillExpert": {
+        "type": "object",
+        "description": "A skill expert within an org unit",
+        "properties": {
+          "employee_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "job_title": {
+            "type": "string",
+            "nullable": true
+          },
+          "org_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "proficiency": {
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "integer"
+          },
+          "last_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["employee_id", "proficiency", "confidence", "last_updated_at"]
+      },
+      "OrgSkillExpertsResponse": {
+        "type": "object",
+        "description": "Skill experts within an org unit",
+        "properties": {
+          "org": {
+            "$ref": "#/components/schemas/OrgRef"
+          },
+          "skill_id": {
+            "type": "integer"
+          },
+          "skill_name": {
+            "type": "string"
+          },
+          "min_proficiency": {
+            "type": "integer"
+          },
+          "experts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrgSkillExpert"
+            }
+          },
+          "total_matching": {
+            "type": "integer"
+          }
+        },
+        "required": ["org", "skill_id", "skill_name", "min_proficiency", "experts", "total_matching"]
+      }
+    }
+  }
+}

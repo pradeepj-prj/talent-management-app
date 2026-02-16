@@ -17,3 +17,4 @@ README.md
 tm_schema.sql
 tm_business_questions.md
 .env.example
+openapi.json
