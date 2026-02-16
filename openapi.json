@@ -48,7 +48,9 @@
   "paths": {
     "/health": {
       "get": {
-        "tags": ["Health"],
+        "tags": [
+          "Health"
+        ],
         "summary": "Health check",
         "description": "Returns API and database health status. Exempt from API key authentication.",
         "operationId": "getHealth",
@@ -79,7 +81,9 @@
     },
     "/tm/employees/{employee_id}/skills": {
       "get": {
-        "tags": ["Employees"],
+        "tags": [
+          "Employees"
+        ],
         "summary": "Get employee skill profile",
         "description": "What skills does this employee have, at what proficiency and confidence?",
         "operationId": "getEmployeeSkills",
@@ -107,15 +111,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/employees/{employee_id}/skills/{skill_id}/evidence": {
       "get": {
-        "tags": ["Employees"],
+        "tags": [
+          "Employees"
+        ],
         "summary": "Get skill evidence for employee",
         "description": "Why do we think this employee is proficient in this skill? Returns all evidence items.",
         "operationId": "getEmployeeSkillEvidence",
@@ -137,7 +149,7 @@
             "required": true,
             "description": "Skill ID",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "example": 1
             }
           }
@@ -153,15 +165,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/employees/{employee_id}/top-skills": {
       "get": {
-        "tags": ["Employees"],
+        "tags": [
+          "Employees"
+        ],
         "summary": "Get employee's strongest skills",
         "description": "Skill passport: what are this employee's strongest skills?",
         "operationId": "getEmployeeTopSkills",
@@ -183,7 +203,7 @@
             "required": false,
             "description": "Number of top skills to return",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 10,
               "minimum": 1,
               "maximum": 50
@@ -201,15 +221,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/employees/{employee_id}/evidence": {
       "get": {
-        "tags": ["Employees"],
+        "tags": [
+          "Employees"
+        ],
         "summary": "Get all evidence for employee",
         "description": "All evidence items across all skills for this employee.",
         "operationId": "getEmployeeEvidence",
@@ -237,15 +265,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/skills": {
       "get": {
-        "tags": ["Skills"],
+        "tags": [
+          "Skills"
+        ],
         "summary": "Browse skill catalog",
         "description": "Browse the skill taxonomy catalog with optional filters by category or search term.",
         "operationId": "getSkillCatalog",
@@ -257,7 +293,14 @@
             "description": "Filter by skill category",
             "schema": {
               "type": "string",
-              "enum": ["technical", "functional", "leadership", "domain", "tool", "other"]
+              "enum": [
+                "technical",
+                "functional",
+                "leadership",
+                "domain",
+                "tool",
+                "other"
+              ]
             }
           },
           {
@@ -282,14 +325,20 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
     "/tm/skills/{skill_id}/experts": {
       "get": {
-        "tags": ["Skills"],
+        "tags": [
+          "Skills"
+        ],
         "summary": "Get top experts for a skill",
         "description": "Who are the top experts in this skill?",
         "operationId": "getSkillExperts",
@@ -300,7 +349,7 @@
             "required": true,
             "description": "Skill ID",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "example": 1
             }
           },
@@ -310,7 +359,7 @@
             "required": false,
             "description": "Minimum proficiency level",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 4,
               "minimum": 0,
               "maximum": 5
@@ -322,7 +371,7 @@
             "required": false,
             "description": "Max results to return",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 20,
               "minimum": 1,
               "maximum": 100
@@ -340,15 +389,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/skills/{skill_id}/coverage": {
       "get": {
-        "tags": ["Skills"],
+        "tags": [
+          "Skills"
+        ],
         "summary": "Get skill coverage and proficiency distribution",
         "description": "How many employees have this skill? Returns a proficiency distribution histogram.",
         "operationId": "getSkillCoverage",
@@ -359,7 +416,7 @@
             "required": true,
             "description": "Skill ID",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "example": 1
             }
           },
@@ -369,7 +426,7 @@
             "required": false,
             "description": "Minimum proficiency for coverage count",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 3,
               "minimum": 0,
               "maximum": 5
@@ -387,15 +444,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/skills/{skill_id}/candidates": {
       "get": {
-        "tags": ["Skills"],
+        "tags": [
+          "Skills"
+        ],
         "summary": "Get evidence-backed candidates for a skill",
         "description": "Who has this skill with strong evidence to back it up?",
         "operationId": "getSkillCandidates",
@@ -406,7 +471,7 @@
             "required": true,
             "description": "Skill ID",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "example": 1
             }
           },
@@ -416,7 +481,7 @@
             "required": false,
             "description": "Minimum proficiency level",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 3,
               "minimum": 0,
               "maximum": 5
@@ -428,7 +493,7 @@
             "required": false,
             "description": "Minimum evidence signal strength",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 4,
               "minimum": 1,
               "maximum": 5
@@ -440,7 +505,7 @@
             "required": false,
             "description": "Max candidates to return",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 20,
               "minimum": 1,
               "maximum": 100
@@ -458,15 +523,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/skills/{skill_id}/stale": {
       "get": {
-        "tags": ["Skills"],
+        "tags": [
+          "Skills"
+        ],
         "summary": "Get employees with stale skill records",
         "description": "Which employees have this skill but it hasn't been validated recently?",
         "operationId": "getStaleSkills",
@@ -477,7 +550,7 @@
             "required": true,
             "description": "Skill ID",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "example": 1
             }
           },
@@ -487,7 +560,7 @@
             "required": false,
             "description": "Skills not updated in this many days",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 365,
               "minimum": 1
             }
@@ -504,15 +577,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/skills/{skill_id}/cooccurring": {
       "get": {
-        "tags": ["Skills"],
+        "tags": [
+          "Skills"
+        ],
         "summary": "Get co-occurring skills",
         "description": "For employees strong in this skill, what other skills do they commonly have?",
         "operationId": "getCooccurringSkills",
@@ -523,7 +604,7 @@
             "required": true,
             "description": "Skill ID",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "example": 1
             }
           },
@@ -533,7 +614,7 @@
             "required": false,
             "description": "Minimum proficiency to consider",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 3,
               "minimum": 0,
               "maximum": 5
@@ -545,7 +626,7 @@
             "required": false,
             "description": "Number of co-occurring skills to return",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 20,
               "minimum": 1,
               "maximum": 50
@@ -563,15 +644,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/talent/search": {
       "get": {
-        "tags": ["Talent Search"],
+        "tags": [
+          "Talent Search"
+        ],
         "summary": "Search employees by multiple skills",
         "description": "Find employees who have ALL specified skills at minimum proficiency. This is an AND search: only employees with every listed skill are returned.",
         "operationId": "searchTalent",
@@ -593,7 +682,7 @@
             "required": false,
             "description": "Minimum proficiency for each skill",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 3,
               "minimum": 0,
               "maximum": 5
@@ -621,14 +710,20 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
         }
       }
     },
     "/tm/orgs/{org_unit_id}/skills/summary": {
       "get": {
-        "tags": ["Organizations"],
+        "tags": [
+          "Organizations"
+        ],
         "summary": "Get org unit skill summary",
         "description": "What are the top skills in this org unit (including child orgs)?",
         "operationId": "getOrgSkillSummary",
@@ -650,7 +745,7 @@
             "required": false,
             "description": "Number of top skills to return",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 20,
               "minimum": 1,
               "maximum": 100
@@ -668,15 +763,23 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     },
     "/tm/orgs/{org_unit_id}/skills/{skill_id}/experts": {
       "get": {
-        "tags": ["Organizations"],
+        "tags": [
+          "Organizations"
+        ],
         "summary": "Get skill experts within an org unit",
         "description": "Who in this org unit has this skill at minimum proficiency?",
         "operationId": "getOrgSkillExperts",
@@ -698,7 +801,7 @@
             "required": true,
             "description": "Skill ID",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "example": 1
             }
           },
@@ -708,7 +811,7 @@
             "required": false,
             "description": "Minimum proficiency level",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 3,
               "minimum": 0,
               "maximum": 5
@@ -720,7 +823,7 @@
             "required": false,
             "description": "Max results",
             "schema": {
-              "type": "integer",
+              "type": "number",
               "default": 20,
               "minimum": 1,
               "maximum": 100
@@ -738,9 +841,15 @@
               }
             }
           },
-          "401": { "$ref": "#/components/responses/Unauthorized" },
-          "403": { "$ref": "#/components/responses/Forbidden" },
-          "404": { "$ref": "#/components/responses/NotFound" }
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
         }
       }
     }
@@ -763,7 +872,7 @@
               "$ref": "#/components/schemas/ErrorResponse"
             },
             "example": {
-              "detail": "Missing API key — include an X-API-Key header"
+              "detail": "Missing API key \u2014 include an X-API-Key header"
             }
           }
         }
@@ -804,7 +913,9 @@
             "description": "Error message"
           }
         },
-        "required": ["detail"]
+        "required": [
+          "detail"
+        ]
       },
       "EmployeeRef": {
         "type": "object",
@@ -841,7 +952,9 @@
             "description": "Seniority level"
           }
         },
-        "required": ["employee_id"]
+        "required": [
+          "employee_id"
+        ]
       },
       "SkillInfo": {
         "type": "object",
@@ -865,7 +978,11 @@
             "description": "Skill description"
           }
         },
-        "required": ["skill_id", "name", "category"]
+        "required": [
+          "skill_id",
+          "name",
+          "category"
+        ]
       },
       "EmployeeSkillEntry": {
         "type": "object",
@@ -901,7 +1018,15 @@
             "description": "When the skill was last updated"
           }
         },
-        "required": ["skill_id", "skill_name", "category", "proficiency", "confidence", "source", "last_updated_at"]
+        "required": [
+          "skill_id",
+          "skill_name",
+          "category",
+          "proficiency",
+          "confidence",
+          "source",
+          "last_updated_at"
+        ]
       },
       "EvidenceItem": {
         "type": "object",
@@ -950,13 +1075,21 @@
             "description": "When the evidence was recorded"
           }
         },
-        "required": ["evidence_id", "evidence_type", "title", "signal_strength", "created_at"]
+        "required": [
+          "evidence_id",
+          "evidence_type",
+          "title",
+          "signal_strength",
+          "created_at"
+        ]
       },
       "EvidenceWithSkill": {
         "type": "object",
         "description": "Evidence item with associated skill information",
         "allOf": [
-          { "$ref": "#/components/schemas/EvidenceItem" },
+          {
+            "$ref": "#/components/schemas/EvidenceItem"
+          },
           {
             "type": "object",
             "properties": {
@@ -969,7 +1102,10 @@
                 "description": "Associated skill name"
               }
             },
-            "required": ["skill_id", "skill_name"]
+            "required": [
+              "skill_id",
+              "skill_name"
+            ]
           }
         ]
       },
@@ -991,7 +1127,11 @@
             "description": "Total number of skills"
           }
         },
-        "required": ["employee", "skills", "total_skills"]
+        "required": [
+          "employee",
+          "skills",
+          "total_skills"
+        ]
       },
       "SkillEvidenceResponse": {
         "type": "object",
@@ -1019,7 +1159,14 @@
             }
           }
         },
-        "required": ["employee", "skill_id", "skill_name", "proficiency", "confidence", "evidence"]
+        "required": [
+          "employee",
+          "skill_id",
+          "skill_name",
+          "proficiency",
+          "confidence",
+          "evidence"
+        ]
       },
       "EmployeeTopSkills": {
         "type": "object",
@@ -1039,7 +1186,11 @@
             "description": "Limit applied"
           }
         },
-        "required": ["employee", "skills", "limit"]
+        "required": [
+          "employee",
+          "skills",
+          "limit"
+        ]
       },
       "EmployeeEvidenceInventory": {
         "type": "object",
@@ -1059,7 +1210,11 @@
             "description": "Total evidence items"
           }
         },
-        "required": ["employee", "evidence", "total_items"]
+        "required": [
+          "employee",
+          "evidence",
+          "total_items"
+        ]
       },
       "SkillCatalogResponse": {
         "type": "object",
@@ -1076,7 +1231,10 @@
             "description": "Total skills matching the filter"
           }
         },
-        "required": ["skills", "total"]
+        "required": [
+          "skills",
+          "total"
+        ]
       },
       "SkillExpert": {
         "type": "object",
@@ -1108,7 +1266,12 @@
             "format": "date-time"
           }
         },
-        "required": ["employee_id", "proficiency", "confidence", "last_updated_at"]
+        "required": [
+          "employee_id",
+          "proficiency",
+          "confidence",
+          "last_updated_at"
+        ]
       },
       "TopExpertsResponse": {
         "type": "object",
@@ -1130,7 +1293,12 @@
             "type": "integer"
           }
         },
-        "required": ["skill", "experts", "min_proficiency", "total_matching"]
+        "required": [
+          "skill",
+          "experts",
+          "min_proficiency",
+          "total_matching"
+        ]
       },
       "ProficiencyBucket": {
         "type": "object",
@@ -1145,7 +1313,10 @@
             "description": "Number of employees at this level"
           }
         },
-        "required": ["proficiency", "count"]
+        "required": [
+          "proficiency",
+          "count"
+        ]
       },
       "SkillCoverageResponse": {
         "type": "object",
@@ -1172,7 +1343,13 @@
             }
           }
         },
-        "required": ["skill", "total_employees", "employees_at_min", "min_proficiency", "distribution"]
+        "required": [
+          "skill",
+          "total_employees",
+          "employees_at_min",
+          "min_proficiency",
+          "distribution"
+        ]
       },
       "EvidenceBackedCandidate": {
         "type": "object",
@@ -1202,7 +1379,12 @@
             }
           }
         },
-        "required": ["employee_id", "proficiency", "confidence", "top_evidence"]
+        "required": [
+          "employee_id",
+          "proficiency",
+          "confidence",
+          "top_evidence"
+        ]
       },
       "EvidenceBackedResponse": {
         "type": "object",
@@ -1224,7 +1406,12 @@
             "type": "integer"
           }
         },
-        "required": ["skill", "candidates", "min_proficiency", "min_evidence_strength"]
+        "required": [
+          "skill",
+          "candidates",
+          "min_proficiency",
+          "min_evidence_strength"
+        ]
       },
       "StaleSkillEntry": {
         "type": "object",
@@ -1256,7 +1443,13 @@
             "description": "Number of days since last update"
           }
         },
-        "required": ["employee_id", "proficiency", "confidence", "last_updated_at", "days_since_update"]
+        "required": [
+          "employee_id",
+          "proficiency",
+          "confidence",
+          "last_updated_at",
+          "days_since_update"
+        ]
       },
       "StaleSkillsResponse": {
         "type": "object",
@@ -1278,7 +1471,12 @@
             "type": "integer"
           }
         },
-        "required": ["skill", "stale_entries", "older_than_days", "total_stale"]
+        "required": [
+          "skill",
+          "stale_entries",
+          "older_than_days",
+          "total_stale"
+        ]
       },
       "CooccurringSkill": {
         "type": "object",
@@ -1298,7 +1496,12 @@
             "description": "Number of employees who have both skills"
           }
         },
-        "required": ["skill_id", "skill_name", "category", "co_occurrence_count"]
+        "required": [
+          "skill_id",
+          "skill_name",
+          "category",
+          "co_occurrence_count"
+        ]
       },
       "SkillAdjacencyResponse": {
         "type": "object",
@@ -1317,7 +1520,11 @@
             }
           }
         },
-        "required": ["skill", "min_proficiency", "cooccurring"]
+        "required": [
+          "skill",
+          "min_proficiency",
+          "cooccurring"
+        ]
       },
       "MatchedSkill": {
         "type": "object",
@@ -1343,7 +1550,14 @@
             "format": "date-time"
           }
         },
-        "required": ["skill_id", "skill_name", "proficiency", "confidence", "source", "last_updated_at"]
+        "required": [
+          "skill_id",
+          "skill_name",
+          "proficiency",
+          "confidence",
+          "source",
+          "last_updated_at"
+        ]
       },
       "TalentSearchHit": {
         "type": "object",
@@ -1375,7 +1589,10 @@
             }
           }
         },
-        "required": ["employee_id", "matched_skills"]
+        "required": [
+          "employee_id",
+          "matched_skills"
+        ]
       },
       "TalentSearchQuery": {
         "type": "object",
@@ -1394,7 +1611,11 @@
             "type": "integer"
           }
         },
-        "required": ["skill_names", "min_proficiency", "results_count"]
+        "required": [
+          "skill_names",
+          "min_proficiency",
+          "results_count"
+        ]
       },
       "TalentSearchResponse": {
         "type": "object",
@@ -1410,7 +1631,10 @@
             }
           }
         },
-        "required": ["query", "results"]
+        "required": [
+          "query",
+          "results"
+        ]
       },
       "OrgRef": {
         "type": "object",
@@ -1430,7 +1654,10 @@
             "description": "Business unit"
           }
         },
-        "required": ["org_id", "org_name"]
+        "required": [
+          "org_id",
+          "org_name"
+        ]
       },
       "OrgSkillSummaryEntry": {
         "type": "object",
@@ -1455,7 +1682,13 @@
             "description": "Average proficiency level"
           }
         },
-        "required": ["skill_id", "name", "category", "employee_count", "avg_proficiency"]
+        "required": [
+          "skill_id",
+          "name",
+          "category",
+          "employee_count",
+          "avg_proficiency"
+        ]
       },
       "OrgSkillSummaryResponse": {
         "type": "object",
@@ -1479,7 +1712,12 @@
             }
           }
         },
-        "required": ["org", "includes_children", "total_profiled_employees", "top_skills"]
+        "required": [
+          "org",
+          "includes_children",
+          "total_profiled_employees",
+          "top_skills"
+        ]
       },
       "OrgSkillExpert": {
         "type": "object",
@@ -1511,7 +1749,12 @@
             "format": "date-time"
           }
         },
-        "required": ["employee_id", "proficiency", "confidence", "last_updated_at"]
+        "required": [
+          "employee_id",
+          "proficiency",
+          "confidence",
+          "last_updated_at"
+        ]
       },
       "OrgSkillExpertsResponse": {
         "type": "object",
@@ -1539,7 +1782,14 @@
             "type": "integer"
           }
         },
-        "required": ["org", "skill_id", "skill_name", "min_proficiency", "experts", "total_matching"]
+        "required": [
+          "org",
+          "skill_id",
+          "skill_name",
+          "min_proficiency",
+          "experts",
+          "total_matching"
+        ]
       }
     }
   }

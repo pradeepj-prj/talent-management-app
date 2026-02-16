@@ -27,19 +27,19 @@ async def get_employee_skills(employee_id: EmpId, conn: DbConn):
 
 
 @router.get("/{employee_id}/skills/{skill_id}/evidence", response_model=SkillEvidenceResponse)
-async def get_skill_evidence(employee_id: EmpId, skill_id: int, conn: DbConn):
+async def get_skill_evidence(employee_id: EmpId, skill_id: float, conn: DbConn):
     """**Endpoint 2** — Why do we think this employee is proficient in this skill?"""
-    return await svc.get_skill_evidence(conn, employee_id, skill_id)
+    return await svc.get_skill_evidence(conn, employee_id, int(skill_id))
 
 
 @router.get("/{employee_id}/top-skills", response_model=EmployeeTopSkills)
 async def get_top_skills(
     employee_id: EmpId,
     conn: DbConn,
-    limit: int = Query(default=10, ge=1, le=50, description="Number of top skills to return"),
+    limit: float = Query(default=10, ge=1, le=50, description="Number of top skills to return"),
 ):
     """**Endpoint 8** — Skill passport: what are this employee's strongest skills?"""
-    return await svc.get_top_skills(conn, employee_id, limit)
+    return await svc.get_top_skills(conn, employee_id, int(limit))
 
 
 @router.get("/{employee_id}/evidence", response_model=EmployeeEvidenceInventory)

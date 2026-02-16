@@ -18,7 +18,7 @@ DbConn = Annotated[Connection, Depends(get_connection)]
 async def talent_search(
     conn: DbConn,
     skills: str = Query(max_length=500, description="Comma-separated skill names (e.g., 'Python,SQL') — max 10 skills"),
-    min_proficiency: int = Query(default=3, ge=0, le=5, description="Minimum proficiency for each skill"),
+    min_proficiency: float = Query(default=3, ge=0, le=5, description="Minimum proficiency for each skill"),
 ):
     """**Endpoint 5** — Find employees who have ALL specified skills at minimum proficiency.
 
@@ -27,4 +27,4 @@ async def talent_search(
     skill_names = [s.strip() for s in skills.split(",") if s.strip()]
     if len(skill_names) > 10:
         raise HTTPException(status_code=400, detail="Maximum 10 skills allowed per search")
-    return await svc.multi_skill_search(conn, skill_names, min_proficiency)
+    return await svc.multi_skill_search(conn, skill_names, int(min_proficiency))
