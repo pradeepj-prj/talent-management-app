@@ -293,7 +293,43 @@ Using `employee_id: str = Path(pattern=...)` forces all subsequent params to hav
 
 ---
 
-## 9. Live Deployment
+## 9. SAP Joule Studio Integration
+
+### Destination Configuration
+
+The API is registered as a BTP destination (`tm-skills-api`) with the API key passed via a custom header property:
+
+| Field | Value |
+|-------|-------|
+| Name | `tm-skills-api` |
+| Type | HTTP |
+| Authentication | `NoAuthentication` |
+| URL | `https://tm-skills-api.cfapps.ap10.hana.ondemand.com` |
+| Additional Property | `URL.headers.X-API-Key` = *(the API key)* |
+
+`URL.headers.<name>` is a standard SAP BTP Destination Service convention for injecting custom HTTP headers. It's not in the dropdown — it must be typed manually.
+
+### OpenAPI Spec
+
+`openapi.json` (OpenAPI 3.0.3, JSON format) was created for uploading to Joule Studio. SAP's ecosystem supports OpenAPI 3.0.x — **not** 3.1 (which uses incompatible JSON Schema features like `"type": ["string", "null"]` instead of `"nullable": true`).
+
+### Known Issue: Joule 10KB Response Context Limit
+
+Joule Studio enforces a **10,000 byte limit** on response context passed to the LLM (error code: `BYTE_SIZE_LIMIT`). The `/tm/skills` catalog endpoint returns all skills (13,455 bytes), exceeding this limit.
+
+**Proposed fix — add pagination to `/tm/skills`:**
+
+1. **SQL** (`app/queries/skill_queries.py`): Add `LIMIT $3 OFFSET $4` to `BROWSE_SKILLS`. Add a `COUNT_BROWSE_SKILLS` query for the total count.
+2. **Service** (`app/services/skill_service.py`): Accept `limit`/`offset` params. Use `COUNT_BROWSE_SKILLS` for `total` (so it reflects all pages, not just the current page).
+3. **Router** (`app/routers/skills.py`): Add `limit` (default 50, max 100) and `offset` (default 0) query parameters.
+4. **Model** (`app/models/skill.py`): Add `limit` and `offset` fields to `SkillCatalogResponse`.
+5. **OpenAPI** (`openapi.json`): Update the `/tm/skills` path parameters and `SkillCatalogResponse` schema.
+
+A default limit of 50 keeps responses around ~7-8KB (well under 10KB). The `total` field lets Joule know if more pages exist.
+
+---
+
+## 10. Live Deployment
 
 The app is deployed and accessible at:
 - **URL:** https://tm-skills-api.cfapps.ap10.hana.ondemand.com
