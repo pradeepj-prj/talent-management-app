@@ -1,5 +1,20 @@
 """SQL queries for employee-centric endpoints (1, 2, 8, 10)."""
 
+# ── Name search ──────────────────────────────────────────────────────────────
+
+SEARCH_EMPLOYEES_BY_NAME = """
+    SELECT employee_id, display_name, job_title, job_family, org_name, seniority_level
+    FROM employee_ref
+    WHERE display_name ILIKE '%' || $1 || '%'
+    ORDER BY display_name
+    LIMIT $2
+"""
+
+COUNT_EMPLOYEES_BY_NAME = """
+    SELECT count(*) FROM employee_ref
+    WHERE display_name ILIKE '%' || $1 || '%'
+"""
+
 # ── Shared: fetch employee_ref row ────────────────────────────────────────────
 
 GET_EMPLOYEE_REF = """

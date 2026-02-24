@@ -31,7 +31,7 @@ skill catalog, employee-skill assignments, and evidence records in the `tm` sche
 
 | Group | Endpoints | Description |
 |-------|-----------|-------------|
-| **Employees** | 1, 2, 8, 10 | Skill profiles, evidence, skill passport |
+| **Employees** | 1, 2, 8, 10, search | Skill profiles, evidence, skill passport, name search |
 | **Skills** | 3, 4, 6, 7, 9, 11 | Experts, coverage, candidates, staleness, co-occurrence, taxonomy |
 | **Talent Search** | 5 | Multi-skill AND search across the workforce |
 | **Organizations** | 12 | Org-level skill summaries with hierarchy traversal |

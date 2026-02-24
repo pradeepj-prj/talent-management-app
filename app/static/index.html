@@ -737,6 +737,15 @@ function buildSidebar() {
       <div class="sidebar-item px-4 py-2 text-sm cursor-pointer hover:bg-slate-700/50 border-l-3 border-transparent" data-id="attrition-dashboard">
         Risk Dashboard
       </div>
+      <div class="sidebar-item px-4 py-2 text-sm cursor-pointer hover:bg-slate-700/50 border-l-3 border-transparent" data-id="attrition-employee-lookup">
+        Employee Lookup
+      </div>
+      <div class="sidebar-item px-4 py-2 text-sm cursor-pointer hover:bg-slate-700/50 border-l-3 border-transparent" data-id="attrition-high-risk">
+        High-Risk Employees
+      </div>
+      <div class="sidebar-item px-4 py-2 text-sm cursor-pointer hover:bg-slate-700/50 border-l-3 border-transparent" data-id="attrition-org-summary">
+        Org Summary
+      </div>
     </div>
   </div>`;
 
@@ -754,10 +763,17 @@ function buildSidebar() {
   });
 
   // Endpoint click
+  const attritionLoaders = {
+    "attrition-dashboard": loadAttritionDashboard,
+    "attrition-employee-lookup": loadEmployeeLookup,
+    "attrition-high-risk": loadHighRisk,
+    "attrition-org-summary": loadOrgSummary,
+  };
   sidebar.querySelectorAll(".sidebar-item").forEach(item => {
     item.addEventListener("click", () => {
-      if (item.dataset.id === "attrition-dashboard") {
-        loadAttritionDashboard();
+      const loader = attritionLoaders[item.dataset.id];
+      if (loader) {
+        loader();
       } else {
         selectEndpoint(item.dataset.id);
       }
@@ -1235,6 +1251,373 @@ function updatePagination() {
   info.textContent = `Showing ${from}–${to} of ${s.total}`;
   prevBtn.disabled = s.offset === 0;
   nextBtn.disabled = s.offset + s.limit >= s.total;
+}
+
+// ── Attrition: shared panel helper ──────────────────────────────────────────
+
+function setupAttritionPanel(sidebarId) {
+  document.querySelectorAll(".sidebar-item").forEach(el => el.classList.remove("active"));
+  document.querySelector(`.sidebar-item[data-id="${sidebarId}"]`)?.classList.add("active");
+  document.getElementById("welcome").classList.add("hidden");
+  document.getElementById("endpoint-panel").classList.add("hidden");
+  const prev = document.getElementById("attrition-dash");
+  if (prev) prev.remove();
+  const main = document.querySelector("main");
+  const panel = document.createElement("div");
+  panel.id = "attrition-dash";
+  panel.className = "fade-in";
+  main.appendChild(panel);
+  return panel;
+}
+
+// ── Attrition: Employee Lookup ─────────────────────────────────────────────
+
+function loadEmployeeLookup() {
+  const panel = setupAttritionPanel("attrition-employee-lookup");
+  panel.innerHTML = `
+    <h2 class="text-xl font-semibold text-blue-400 mb-1">Employee Attrition Lookup</h2>
+    <p class="text-sm text-slate-400 mb-4">Search by name or look up by employee ID to see attrition risk prediction.</p>
+
+    <!-- Name search -->
+    <div class="bg-slate-800 rounded-lg p-3 mb-3 border border-slate-700">
+      <label class="text-xs text-slate-400 mb-1 block font-semibold uppercase tracking-wider">Search by Name</label>
+      <div class="flex gap-2 items-end">
+        <input id="emp-name-input" type="text" placeholder="e.g. Hamilton" class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-64" />
+        <button id="emp-name-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded text-sm font-medium transition-colors">Search</button>
+      </div>
+      <div id="emp-name-results" class="mt-2"></div>
+    </div>
+
+    <!-- ID lookup -->
+    <div class="bg-slate-800 rounded-lg p-3 mb-4 border border-slate-700">
+      <label class="text-xs text-slate-400 mb-1 block font-semibold uppercase tracking-wider">Lookup by Employee ID</label>
+      <div class="flex gap-2 items-end">
+        <input id="emp-id-input" type="text" placeholder="EMP000001" class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-48 font-mono" />
+        <button id="emp-id-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded text-sm font-medium transition-colors">Lookup</button>
+      </div>
+    </div>
+
+    <!-- Result -->
+    <div id="emp-lookup-result"></div>
+  `;
+
+  // Name search
+  const nameInput = document.getElementById("emp-name-input");
+  document.getElementById("emp-name-btn").addEventListener("click", () => doNameSearch());
+  nameInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doNameSearch(); });
+
+  async function doNameSearch() {
+    const name = nameInput.value.trim();
+    if (name.length < 2) return;
+    const area = document.getElementById("emp-name-results");
+    area.innerHTML = `<span class="text-slate-500 text-xs">Searching…</span>`;
+    try {
+      const data = await attritionFetch("/tm/employees/search?name=" + encodeURIComponent(name) + "&limit=20");
+      if (!data.employees.length) {
+        area.innerHTML = `<span class="text-slate-400 text-xs">No employees found matching "${name}".</span>`;
+        return;
+      }
+      let html = `<div class="text-xs text-slate-500 mb-1">${data.total} result${data.total !== 1 ? "s" : ""} (showing up to 20)</div>`;
+      html += `<div class="max-h-48 overflow-y-auto">`;
+      for (const e of data.employees) {
+        html += `<div class="emp-search-result flex items-center gap-3 px-2 py-1.5 rounded cursor-pointer hover:bg-slate-700/60 text-sm" data-id="${e.employee_id}">
+          <span class="font-mono text-xs text-blue-300">${e.employee_id}</span>
+          <span class="text-slate-200">${e.display_name}</span>
+          <span class="text-xs text-slate-500">${e.job_title || ""}</span>
+        </div>`;
+      }
+      html += `</div>`;
+      area.innerHTML = html;
+      area.querySelectorAll(".emp-search-result").forEach(el => {
+        el.addEventListener("click", () => {
+          document.getElementById("emp-id-input").value = el.dataset.id;
+          doIdLookup(el.dataset.id);
+        });
+      });
+    } catch (err) {
+      area.innerHTML = `<span class="text-red-400 text-xs">Error: ${err.message}</span>`;
+    }
+  }
+
+  // ID lookup
+  const idInput = document.getElementById("emp-id-input");
+  document.getElementById("emp-id-btn").addEventListener("click", () => doIdLookup(idInput.value.trim()));
+  idInput.addEventListener("keydown", (e) => { if (e.key === "Enter") doIdLookup(idInput.value.trim()); });
+
+  async function doIdLookup(empId) {
+    if (!empId) return;
+    const area = document.getElementById("emp-lookup-result");
+    area.innerHTML = `<div class="flex items-center gap-2 text-slate-400 py-4"><svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60 30"/></svg> Loading…</div>`;
+    try {
+      const data = await attritionFetch("/tm/attrition/employees/" + encodeURIComponent(empId));
+      const e = data.employee;
+      let html = `<div class="bg-slate-800 rounded-lg border border-slate-700 p-4 fade-in">
+        <div class="flex items-center gap-4 mb-3">
+          <div>
+            <h3 class="text-lg font-semibold text-slate-100">${e.display_name || empId}</h3>
+            <p class="text-xs text-slate-400">${e.employee_id} · ${e.job_title || "—"} · ${e.org_name || "—"}</p>
+          </div>
+          <div class="ml-auto text-right">
+            ${riskBadge(data.risk_level)}
+            <div class="mt-1 text-lg font-bold font-mono text-slate-200">${(data.probability * 100).toFixed(1)}%</div>
+          </div>
+        </div>
+        <div class="w-full h-3 bg-slate-700 rounded-full overflow-hidden mb-4">
+          <div class="risk-bar" style="width:${Math.min(data.probability / 0.95 * 100, 100)}%; background:${riskBarColor(data.risk_level)};"></div>
+        </div>
+        <h4 class="text-sm font-semibold text-slate-300 mb-2">Factor Breakdown</h4>
+        ${renderFactors(data.factors)}
+      </div>`;
+      area.innerHTML = html;
+    } catch (err) {
+      area.innerHTML = `<div class="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300"><strong>Error</strong>: ${err.message}</div>`;
+    }
+  }
+}
+
+// ── Attrition: High-Risk Employees ─────────────────────────────────────────
+
+function loadHighRisk() {
+  const panel = setupAttritionPanel("attrition-high-risk");
+  panel.innerHTML = `
+    <h2 class="text-xl font-semibold text-blue-400 mb-1">High-Risk Employees</h2>
+    <p class="text-sm text-slate-400 mb-4">Employees above a given attrition probability threshold.</p>
+
+    <div class="bg-slate-800 rounded-lg p-3 mb-4 flex flex-wrap gap-4 items-end border border-slate-700">
+      <div class="flex flex-col">
+        <label class="text-xs text-slate-400 mb-1">Threshold</label>
+        <input id="hr-threshold" type="number" step="0.05" min="0" max="0.95" value="0.25"
+               class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-28" />
+      </div>
+      <div class="flex flex-col">
+        <label class="text-xs text-slate-400 mb-1">Limit</label>
+        <input id="hr-limit" type="number" min="1" max="200" value="50"
+               class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-28" />
+      </div>
+      <button id="hr-load-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded text-sm font-medium transition-colors">Load</button>
+    </div>
+
+    <div id="hr-table-area">
+      <div class="text-slate-400 text-center py-8">Set threshold and click <strong>Load</strong>.</div>
+    </div>
+  `;
+
+  const hrExpandedRows = new Set();
+
+  document.getElementById("hr-load-btn").addEventListener("click", async () => {
+    const threshold = document.getElementById("hr-threshold").value;
+    const limit = document.getElementById("hr-limit").value;
+    const area = document.getElementById("hr-table-area");
+    area.innerHTML = `<div class="flex items-center gap-2 text-slate-400 py-8 justify-center">
+      <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60 30"/></svg>
+      Loading…
+    </div>`;
+    hrExpandedRows.clear();
+
+    try {
+      const data = await attritionFetch(`/tm/attrition/high-risk?threshold=${threshold}&limit=${limit}`);
+      if (!data.employees.length) {
+        area.innerHTML = `<div class="text-slate-400 text-center py-8">No employees above threshold ${threshold}.</div>`;
+        return;
+      }
+
+      renderHighRiskTable(data.employees, area, hrExpandedRows);
+    } catch (err) {
+      area.innerHTML = `<div class="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300"><strong>Error</strong>: ${err.message}</div>`;
+    }
+  });
+}
+
+function renderHighRiskTable(employees, area, expandedRows) {
+  let html = `<div class="text-xs text-slate-500 mb-2">${employees.length} employee${employees.length !== 1 ? "s" : ""} above threshold</div>`;
+  html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+    <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+      <th class="py-2 pr-3">Employee</th><th class="pr-3">Name</th><th class="pr-3">Job Title</th>
+      <th class="pr-3">Org</th><th class="pr-3">Risk</th><th class="pr-3">Probability</th><th></th>
+    </tr></thead><tbody>`;
+
+  for (const emp of employees) {
+    const e = emp.employee;
+    const pctW = Math.min(emp.probability * 100 / 0.95 * 100, 100);
+
+    html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+      <td class="py-2 pr-3 font-mono text-xs text-blue-300">${e.employee_id}</td>
+      <td class="pr-3">${e.display_name || "—"}</td>
+      <td class="pr-3 text-xs text-slate-400">${e.job_title || "—"}</td>
+      <td class="pr-3 text-xs text-slate-400">${e.org_name || "—"}</td>
+      <td class="pr-3">${riskBadge(emp.risk_level)}</td>
+      <td class="pr-3">
+        <div class="flex items-center gap-2">
+          <div class="w-24 h-3 bg-slate-700 rounded-full overflow-hidden">
+            <div class="risk-bar" style="width:${pctW}%; background:${riskBarColor(emp.risk_level)};"></div>
+          </div>
+          <span class="text-xs font-mono text-slate-300">${(emp.probability * 100).toFixed(1)}%</span>
+        </div>
+      </td>
+      <td>
+        <button class="hr-factor-toggle text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap" data-emp="${e.employee_id}">
+          [Show Factors]
+        </button>
+      </td>
+    </tr>`;
+    html += `<tr id="hr-factors-${e.employee_id}" class="hidden">
+      <td colspan="7" class="py-2 px-4 bg-slate-800/40">
+        <div id="hr-factors-content-${e.employee_id}">${emp.factors ? renderFactors(emp.factors) : ""}</div>
+      </td>
+    </tr>`;
+  }
+  html += "</tbody></table></div>";
+  area.innerHTML = html;
+
+  // Wire factor toggles
+  area.querySelectorAll(".hr-factor-toggle").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const empId = btn.dataset.emp;
+      const row = document.getElementById(`hr-factors-${empId}`);
+      const content = document.getElementById(`hr-factors-content-${empId}`);
+      if (expandedRows.has(empId)) {
+        expandedRows.delete(empId);
+        row.classList.add("hidden");
+        btn.textContent = "[Show Factors]";
+      } else {
+        expandedRows.add(empId);
+        row.classList.remove("hidden");
+        btn.textContent = "[Hide Factors]";
+        if (!content.innerHTML.trim()) {
+          content.innerHTML = `<span class="text-slate-500 text-xs">Loading factors…</span>`;
+          try {
+            const data = await attritionFetch(`/tm/attrition/employees/${empId}`);
+            content.innerHTML = renderFactors(data.factors);
+          } catch (err) {
+            content.innerHTML = `<span class="text-red-400 text-xs">Error: ${err.message}</span>`;
+          }
+        }
+      }
+    });
+  });
+}
+
+// ── Attrition: Org Summary ─────────────────────────────────────────────────
+
+function loadOrgSummary() {
+  const panel = setupAttritionPanel("attrition-org-summary");
+  panel.innerHTML = `
+    <h2 class="text-xl font-semibold text-blue-400 mb-1">Org Attrition Summary</h2>
+    <p class="text-sm text-slate-400 mb-4">Risk distribution and top-risk employees for an organizational unit.</p>
+
+    <div class="bg-slate-800 rounded-lg p-3 mb-4 flex flex-wrap gap-4 items-end border border-slate-700">
+      <div class="flex flex-col">
+        <label class="text-xs text-slate-400 mb-1">Org Unit ID</label>
+        <input id="org-id-input" type="text" placeholder="ORG030" value="ORG030"
+               class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-36 font-mono" />
+      </div>
+      <div class="flex flex-col">
+        <label class="text-xs text-slate-400 mb-1">Top Risk Limit</label>
+        <input id="org-top-limit" type="number" min="1" max="50" value="10"
+               class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-28" />
+      </div>
+      <button id="org-load-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded text-sm font-medium transition-colors">Load</button>
+    </div>
+
+    <div id="org-summary-area">
+      <div class="text-slate-400 text-center py-8">Enter an org ID and click <strong>Load</strong>.</div>
+    </div>
+  `;
+
+  document.getElementById("org-load-btn").addEventListener("click", async () => {
+    const orgId = document.getElementById("org-id-input").value.trim();
+    const topLimit = document.getElementById("org-top-limit").value;
+    if (!orgId) return;
+
+    const area = document.getElementById("org-summary-area");
+    area.innerHTML = `<div class="flex items-center gap-2 text-slate-400 py-8 justify-center">
+      <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60 30"/></svg>
+      Loading…
+    </div>`;
+
+    try {
+      const data = await attritionFetch(`/tm/attrition/orgs/${encodeURIComponent(orgId)}/summary?top_risk_limit=${topLimit}`);
+      renderOrgSummary(data, area);
+    } catch (err) {
+      area.innerHTML = `<div class="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300"><strong>Error</strong>: ${err.message}</div>`;
+    }
+  });
+}
+
+function renderOrgSummary(data, area) {
+  const dist = data.risk_distribution;
+  const total = data.total_employees;
+
+  let html = `
+    <!-- Org header -->
+    <div class="bg-slate-800 rounded-lg border border-slate-700 p-4 mb-4">
+      <div class="flex items-center gap-4">
+        <div>
+          <h3 class="text-lg font-semibold text-slate-100">${data.org_name}</h3>
+          <p class="text-xs text-slate-400">${data.org_id} · ${total} employee${total !== 1 ? "s" : ""}</p>
+        </div>
+        <div class="ml-auto text-right">
+          <div class="text-xs text-slate-400">Avg. Probability</div>
+          <div class="text-lg font-bold font-mono text-slate-200">${(data.avg_probability * 100).toFixed(1)}%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Risk distribution cards -->
+    <div class="grid grid-cols-4 gap-3 mb-5">`;
+
+  const levels = [
+    { key: "low", label: "Low Risk" },
+    { key: "medium", label: "Medium" },
+    { key: "high", label: "High" },
+    { key: "critical", label: "Critical" },
+  ];
+  for (const lv of levels) {
+    const count = dist[lv.key] || 0;
+    const pct = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+    html += `<div class="rounded-lg p-3 border border-slate-700 bg-slate-800">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider risk-${lv.key}" style="background:none;">${lv.label}</span>
+        <span class="text-lg font-bold text-slate-200">${count}</span>
+      </div>
+      <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div class="risk-bar" style="width:${pct}%; background:${riskBarColor(lv.key)};"></div>
+      </div>
+      <span class="text-xs text-slate-500 mt-1 block">${pct}% of ${total}</span>
+    </div>`;
+  }
+  html += `</div>`;
+
+  // Top risk employees table
+  if (data.top_risk && data.top_risk.length) {
+    html += `<h4 class="text-sm font-semibold text-slate-300 mb-2">Top Risk Employees</h4>`;
+    html += `<div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+        <th class="py-2 pr-3">Employee</th><th class="pr-3">Name</th><th class="pr-3">Job Title</th>
+        <th class="pr-3">Risk</th><th class="pr-3">Probability</th>
+      </tr></thead><tbody>`;
+    for (const emp of data.top_risk) {
+      const e = emp.employee;
+      const pctW = Math.min(emp.probability * 100 / 0.95 * 100, 100);
+      html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+        <td class="py-2 pr-3 font-mono text-xs text-blue-300">${e.employee_id}</td>
+        <td class="pr-3">${e.display_name || "—"}</td>
+        <td class="pr-3 text-xs text-slate-400">${e.job_title || "—"}</td>
+        <td class="pr-3">${riskBadge(emp.risk_level)}</td>
+        <td class="pr-3">
+          <div class="flex items-center gap-2">
+            <div class="w-24 h-3 bg-slate-700 rounded-full overflow-hidden">
+              <div class="risk-bar" style="width:${pctW}%; background:${riskBarColor(emp.risk_level)};"></div>
+            </div>
+            <span class="text-xs font-mono text-slate-300">${(emp.probability * 100).toFixed(1)}%</span>
+          </div>
+        </td>
+      </tr>`;
+    }
+    html += "</tbody></table></div>";
+  }
+
+  area.innerHTML = html;
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────

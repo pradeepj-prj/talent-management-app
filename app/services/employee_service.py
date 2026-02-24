@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from app.models.common import EmployeeRef
 from app.models.employee import (
     EmployeeEvidenceInventory,
+    EmployeeSearchResult,
     EmployeeSkillProfile,
     EmployeeTopSkills,
     SkillEvidenceResponse,
@@ -59,6 +60,14 @@ async def get_top_skills(conn: Connection, employee_id: str, limit: int) -> Empl
     rows = await conn.fetch(Q.GET_TOP_SKILLS, employee_id, limit)
     skills = [EmployeeSkillEntry(**dict(r)) for r in rows]
     return EmployeeTopSkills(employee=emp, skills=skills, limit=limit)
+
+
+async def search_employees_by_name(conn: Connection, name: str, limit: int) -> EmployeeSearchResult:
+    """Search employees by name (partial, case-insensitive match)."""
+    rows = await conn.fetch(Q.SEARCH_EMPLOYEES_BY_NAME, name, limit)
+    total = await conn.fetchval(Q.COUNT_EMPLOYEES_BY_NAME, name)
+    employees = [EmployeeRef(**dict(r)) for r in rows]
+    return EmployeeSearchResult(employees=employees, total=total)
 
 
 async def get_evidence_inventory(conn: Connection, employee_id: str) -> EmployeeEvidenceInventory:

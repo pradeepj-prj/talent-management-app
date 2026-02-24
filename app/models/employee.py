@@ -36,3 +36,9 @@ class EmployeeEvidenceInventory(BaseModel):
     employee: EmployeeRef
     evidence: list[EvidenceWithSkill]
     total_items: int
+
+
+class EmployeeSearchResult(BaseModel):
+    """Name search results."""
+    employees: list[EmployeeRef]
+    total: int

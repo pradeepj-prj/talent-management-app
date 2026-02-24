@@ -142,3 +142,33 @@ class TestOrgAttritionSummary:
     async def test_404_for_unknown_org(self, client):
         resp = await client.get("/tm/attrition/orgs/ORG999/summary")
         assert resp.status_code == 404
+
+
+@pytest.mark.asyncio(loop_scope="session")
+class TestEmployeeNameSearch:
+    """GET /tm/employees/search"""
+
+    async def test_search_returns_matching_results(self, client):
+        resp = await client.get("/tm/employees/search?name=Hamilton")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] >= 1
+        names = [e["display_name"] for e in data["employees"]]
+        assert any("Hamilton" in n for n in names)
+
+    async def test_partial_match(self, client):
+        resp = await client.get("/tm/employees/search?name=ham")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] >= 1
+
+    async def test_no_results_for_nonsense(self, client):
+        resp = await client.get("/tm/employees/search?name=zzxxyy999")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 0
+        assert data["employees"] == []
+
+    async def test_422_for_short_query(self, client):
+        resp = await client.get("/tm/employees/search?name=a")
+        assert resp.status_code == 422

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Path, Query
 from app.database import get_connection
 from app.models.employee import (
     EmployeeEvidenceInventory,
+    EmployeeSearchResult,
     EmployeeSkillProfile,
     EmployeeTopSkills,
     SkillEvidenceResponse,
@@ -18,6 +19,16 @@ router = APIRouter(prefix="/tm/employees", tags=["Employees"])
 
 DbConn = Annotated[Connection, Depends(get_connection)]
 EmpId = Annotated[str, Path(pattern=r"^EMP\d{6}$", description="Employee ID (e.g. EMP000001)")]
+
+
+@router.get("/search", response_model=EmployeeSearchResult)
+async def search_employees(
+    conn: DbConn,
+    name: str = Query(min_length=2, description="Name to search for (partial match)"),
+    limit: float = Query(default=20, ge=1, le=100, description="Max results"),
+):
+    """Search employees by name (partial, case-insensitive match)."""
+    return await svc.search_employees_by_name(conn, name, int(limit))
 
 
 @router.get("/{employee_id}/skills", response_model=EmployeeSkillProfile)
