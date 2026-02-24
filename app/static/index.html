@@ -27,6 +27,16 @@
 
     /* Bar chart bars */
     .bar-chart-bar { transition: width 0.4s ease-out; }
+
+    /* Attrition risk levels */
+    .risk-low { background: #064e3b; color: #6ee7b7; }
+    .risk-medium { background: #78350f; color: #fcd34d; }
+    .risk-high { background: #7c2d12; color: #fb923c; }
+    .risk-critical { background: #7f1d1d; color: #fca5a5; }
+    .risk-bar { transition: width 0.4s ease-out; height: 100%; border-radius: 4px; }
+    .factor-increase { color: #fca5a5; }
+    .factor-decrease { color: #6ee7b7; }
+    .factor-neutral  { color: #94a3b8; }
   </style>
 </head>
 <body class="bg-slate-900 text-slate-200 min-h-screen flex flex-col">
@@ -716,6 +726,20 @@ function buildSidebar() {
     }
     html += `</div></div>`;
   }
+
+  // Attrition Prediction — dashboard-style entry (not a normal endpoint)
+  html += `<div class="border-b border-slate-700">
+    <button class="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-400 uppercase tracking-wider hover:bg-slate-700/50 flex items-center justify-between group-toggle" data-group="Attrition Prediction">
+      Attrition Prediction
+      <svg class="w-3 h-3 transform transition-transform group-arrow" viewBox="0 0 12 12"><path d="M3 5l3 3 3-3" stroke="currentColor" fill="none" stroke-width="1.5"/></svg>
+    </button>
+    <div class="group-items" data-group="Attrition Prediction">
+      <div class="sidebar-item px-4 py-2 text-sm cursor-pointer hover:bg-slate-700/50 border-l-3 border-transparent" data-id="attrition-dashboard">
+        Risk Dashboard
+      </div>
+    </div>
+  </div>`;
+
   sidebar.innerHTML = html;
 
   // Toggle group collapse
@@ -731,7 +755,13 @@ function buildSidebar() {
 
   // Endpoint click
   sidebar.querySelectorAll(".sidebar-item").forEach(item => {
-    item.addEventListener("click", () => selectEndpoint(item.dataset.id));
+    item.addEventListener("click", () => {
+      if (item.dataset.id === "attrition-dashboard") {
+        loadAttritionDashboard();
+      } else {
+        selectEndpoint(item.dataset.id);
+      }
+    });
   });
 }
 
@@ -748,7 +778,9 @@ function selectEndpoint(id) {
   document.querySelectorAll(".sidebar-item").forEach(el => el.classList.remove("active"));
   document.querySelector(`.sidebar-item[data-id="${id}"]`)?.classList.add("active");
 
-  // Show panel
+  // Remove attrition dashboard if present, show endpoint panel
+  const attDash = document.getElementById("attrition-dash");
+  if (attDash) attDash.remove();
   document.getElementById("welcome").classList.add("hidden");
   const panel = document.getElementById("endpoint-panel");
   panel.classList.remove("hidden");
@@ -858,6 +890,351 @@ async function checkHealth() {
     text.textContent = "API unreachable";
     text.className = "text-xs text-red-400";
   }
+}
+
+// ── Attrition Dashboard ──────────────────────────────────────────────────────
+
+const attritionState = {
+  employees: [],
+  total: 0,
+  limit: 50,
+  offset: 0,
+  minRisk: "",
+  sort: "risk_desc",
+  factorCache: {},       // employee_id → factors (from detail endpoint)
+  expandedRows: new Set(),
+  summaryCards: null,     // { low, medium, high, critical }
+};
+
+function riskBadge(level) {
+  return `<span class="px-2 py-0.5 rounded text-xs font-semibold risk-${level}">${level}</span>`;
+}
+
+function riskBarColor(level) {
+  const map = { low: "#6ee7b7", medium: "#fcd34d", high: "#fb923c", critical: "#fca5a5" };
+  return map[level] || "#94a3b8";
+}
+
+function factorClass(mult) {
+  if (mult > 1.0) return "factor-increase";
+  if (mult < 1.0) return "factor-decrease";
+  return "factor-neutral";
+}
+
+async function attritionFetch(url) {
+  const headers = {};
+  const apiKey = document.getElementById("api-key-input").value.trim();
+  if (apiKey) headers["X-API-Key"] = apiKey;
+  const resp = await fetch(url, { headers });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({}));
+    throw new Error(err.detail || `HTTP ${resp.status}`);
+  }
+  return resp.json();
+}
+
+function loadAttritionDashboard() {
+  // Sidebar active state
+  document.querySelectorAll(".sidebar-item").forEach(el => el.classList.remove("active"));
+  document.querySelector('.sidebar-item[data-id="attrition-dashboard"]')?.classList.add("active");
+
+  // Hide normal endpoint panel, show dashboard in main
+  document.getElementById("welcome").classList.add("hidden");
+  document.getElementById("endpoint-panel").classList.add("hidden");
+
+  // Render into main
+  const main = document.querySelector("main");
+
+  // Remove previous dashboard if any
+  const prev = document.getElementById("attrition-dash");
+  if (prev) prev.remove();
+
+  const dash = document.createElement("div");
+  dash.id = "attrition-dash";
+  dash.className = "fade-in";
+  dash.innerHTML = `
+    <h2 class="text-xl font-semibold text-blue-400 mb-1">Attrition Risk Dashboard</h2>
+    <p class="text-sm text-slate-400 mb-4">Deterministic rules-based attrition prediction with explainable factors.</p>
+
+    <!-- Summary cards -->
+    <div id="att-summary" class="grid grid-cols-4 gap-3 mb-5">
+      <div class="rounded-lg p-3 border border-slate-700 bg-slate-800 text-center"><span class="text-slate-500 text-sm">Loading…</span></div>
+      <div class="rounded-lg p-3 border border-slate-700 bg-slate-800 text-center"><span class="text-slate-500 text-sm">Loading…</span></div>
+      <div class="rounded-lg p-3 border border-slate-700 bg-slate-800 text-center"><span class="text-slate-500 text-sm">Loading…</span></div>
+      <div class="rounded-lg p-3 border border-slate-700 bg-slate-800 text-center"><span class="text-slate-500 text-sm">Loading…</span></div>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-slate-800 rounded-lg p-3 mb-4 flex flex-wrap gap-4 items-end border border-slate-700">
+      <div class="flex flex-col">
+        <label class="text-xs text-slate-400 mb-1">Risk Level</label>
+        <select id="att-risk-filter" class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-36">
+          <option value="">All</option>
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="critical">Critical</option>
+        </select>
+      </div>
+      <div class="flex flex-col">
+        <label class="text-xs text-slate-400 mb-1">Sort</label>
+        <select id="att-sort" class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-200 focus:border-blue-500 focus:outline-none w-36">
+          <option value="risk_desc">Risk (High → Low)</option>
+          <option value="risk_asc">Risk (Low → High)</option>
+          <option value="name">Name (A → Z)</option>
+        </select>
+      </div>
+      <button id="att-load-btn" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-1.5 rounded text-sm font-medium transition-colors">Load</button>
+    </div>
+
+    <!-- Table -->
+    <div id="att-table-area">
+      <div class="text-slate-400 text-center py-8">Click <strong>Load</strong> to fetch predictions.</div>
+    </div>
+
+    <!-- Pagination -->
+    <div id="att-pagination" class="hidden flex items-center justify-between mt-3 text-sm text-slate-400">
+      <span id="att-page-info"></span>
+      <div class="flex gap-2">
+        <button id="att-prev" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-xs disabled:opacity-40" disabled>← Prev</button>
+        <button id="att-next" class="bg-slate-700 hover:bg-slate-600 px-3 py-1 rounded text-xs disabled:opacity-40" disabled>Next →</button>
+      </div>
+    </div>
+  `;
+  main.appendChild(dash);
+
+  // Wire up controls
+  document.getElementById("att-load-btn").addEventListener("click", () => {
+    attritionState.offset = 0;
+    attritionState.minRisk = document.getElementById("att-risk-filter").value;
+    attritionState.sort = document.getElementById("att-sort").value;
+    fetchAttritionPage();
+  });
+  document.getElementById("att-prev").addEventListener("click", () => {
+    attritionState.offset = Math.max(0, attritionState.offset - attritionState.limit);
+    fetchAttritionPage();
+  });
+  document.getElementById("att-next").addEventListener("click", () => {
+    attritionState.offset += attritionState.limit;
+    fetchAttritionPage();
+  });
+
+  // Load summary cards + first page
+  fetchAttritionSummary();
+  fetchAttritionPage();
+}
+
+async function fetchAttritionSummary() {
+  try {
+    // Fetch all with no filter to get total counts per risk level
+    // We fetch a small page just to get the total, then fetch counts per level
+    const [low, med, high, crit] = await Promise.all([
+      attritionFetch("/tm/attrition/employees?limit=1&offset=0&min_risk=low"),
+      attritionFetch("/tm/attrition/employees?limit=1&offset=0&min_risk=medium"),
+      attritionFetch("/tm/attrition/employees?limit=1&offset=0&min_risk=high"),
+      attritionFetch("/tm/attrition/employees?limit=1&offset=0&min_risk=critical"),
+    ]);
+    const total = low.total;
+    const counts = {
+      critical: crit.total,
+      high: high.total - crit.total,
+      medium: med.total - high.total,
+      low: total - med.total,
+    };
+    attritionState.summaryCards = counts;
+    renderSummaryCards(counts, total);
+  } catch (err) {
+    document.getElementById("att-summary").innerHTML =
+      `<div class="col-span-4 text-red-400 text-sm">Failed to load summary: ${err.message}</div>`;
+  }
+}
+
+function renderSummaryCards(counts, total) {
+  const cards = [
+    { level: "low", label: "Low Risk", count: counts.low },
+    { level: "medium", label: "Medium", count: counts.medium },
+    { level: "high", label: "High", count: counts.high },
+    { level: "critical", label: "Critical", count: counts.critical },
+  ];
+  let html = "";
+  for (const c of cards) {
+    const pct = total > 0 ? ((c.count / total) * 100).toFixed(1) : 0;
+    html += `<div class="rounded-lg p-3 border border-slate-700 bg-slate-800">
+      <div class="flex items-center justify-between mb-2">
+        <span class="text-xs font-semibold uppercase tracking-wider risk-${c.level}" style="background:none;">${c.label}</span>
+        <span class="text-lg font-bold text-slate-200">${c.count}</span>
+      </div>
+      <div class="w-full h-2 bg-slate-700 rounded-full overflow-hidden">
+        <div class="risk-bar" style="width:${pct}%; background:${riskBarColor(c.level)};"></div>
+      </div>
+      <span class="text-xs text-slate-500 mt-1 block">${pct}% of ${total}</span>
+    </div>`;
+  }
+  document.getElementById("att-summary").innerHTML = html;
+}
+
+async function fetchAttritionPage() {
+  const s = attritionState;
+  const area = document.getElementById("att-table-area");
+  area.innerHTML = `<div class="flex items-center gap-2 text-slate-400 py-8 justify-center">
+    <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="60 30"/></svg>
+    Loading…
+  </div>`;
+
+  try {
+    let url = `/tm/attrition/employees?limit=${s.limit}&offset=${s.offset}&sort=${s.sort}`;
+    if (s.minRisk) url += `&min_risk=${s.minRisk}`;
+    const data = await attritionFetch(url);
+    s.employees = data.employees;
+    s.total = data.total;
+    renderAttritionTable();
+    updatePagination();
+  } catch (err) {
+    area.innerHTML = `<div class="bg-red-900/30 border border-red-800 rounded-lg p-4 text-red-300">
+      <strong>Error</strong>: ${err.message}
+    </div>`;
+  }
+}
+
+function renderAttritionTable() {
+  const s = attritionState;
+  if (!s.employees.length) {
+    document.getElementById("att-table-area").innerHTML =
+      `<div class="text-slate-400 text-center py-8">No employees match the current filters.</div>`;
+    return;
+  }
+
+  let html = `<div class="overflow-x-auto"><table class="w-full text-sm">
+    <thead><tr class="text-left text-slate-400 border-b border-slate-700">
+      <th class="py-2 pr-3">Employee</th><th class="pr-3">Name</th><th class="pr-3">Job Title</th>
+      <th class="pr-3">Org</th><th class="pr-3">Risk</th><th class="pr-3">Probability</th><th></th>
+    </tr></thead><tbody>`;
+
+  for (const emp of s.employees) {
+    const e = emp.employee;
+    const pctW = Math.min(emp.probability * 100 / 0.95 * 100, 100);  // scale to max 0.95
+    const isExpanded = s.expandedRows.has(e.employee_id);
+
+    html += `<tr class="border-b border-slate-800 hover:bg-slate-800/50">
+      <td class="py-2 pr-3 font-mono text-xs text-blue-300">${e.employee_id}</td>
+      <td class="pr-3">${e.display_name || "—"}</td>
+      <td class="pr-3 text-xs text-slate-400">${e.job_title || "—"}</td>
+      <td class="pr-3 text-xs text-slate-400">${e.org_name || "—"}</td>
+      <td class="pr-3">${riskBadge(emp.risk_level)}</td>
+      <td class="pr-3">
+        <div class="flex items-center gap-2">
+          <div class="w-24 h-3 bg-slate-700 rounded-full overflow-hidden">
+            <div class="risk-bar" style="width:${pctW}%; background:${riskBarColor(emp.risk_level)};"></div>
+          </div>
+          <span class="text-xs font-mono text-slate-300">${(emp.probability * 100).toFixed(1)}%</span>
+        </div>
+      </td>
+      <td>
+        <button class="att-factor-toggle text-xs text-blue-400 hover:text-blue-300 whitespace-nowrap" data-emp="${e.employee_id}">
+          ${isExpanded ? "[Hide Factors]" : "[Show Factors]"}
+        </button>
+      </td>
+    </tr>`;
+
+    // Factor breakdown row (hidden by default)
+    html += `<tr id="att-factors-${e.employee_id}" class="${isExpanded ? "" : "hidden"}">
+      <td colspan="7" class="py-2 px-4 bg-slate-800/40">
+        <div id="att-factors-content-${e.employee_id}">
+          ${isExpanded ? renderFactors(emp.factors) : ""}
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  html += "</tbody></table></div>";
+  document.getElementById("att-table-area").innerHTML = html;
+
+  // Wire up factor toggle buttons
+  document.querySelectorAll(".att-factor-toggle").forEach(btn => {
+    btn.addEventListener("click", () => toggleFactors(btn.dataset.emp));
+  });
+}
+
+function renderFactors(factors) {
+  if (!factors || !factors.length) return `<span class="text-slate-500 text-xs">No factor data.</span>`;
+  let html = `<table class="w-full text-xs">
+    <thead><tr class="text-left text-slate-500">
+      <th class="py-1 pr-3">Factor</th><th class="pr-3">Value</th><th class="pr-3">Multiplier</th><th>Description</th>
+    </tr></thead><tbody>`;
+  for (const f of factors) {
+    const cls = factorClass(f.multiplier);
+    html += `<tr class="border-b border-slate-800/50">
+      <td class="py-1 pr-3 font-medium text-slate-300">${f.factor}</td>
+      <td class="pr-3 font-mono text-slate-400">${f.value}</td>
+      <td class="pr-3 font-mono font-semibold ${cls}">${f.multiplier.toFixed(1)}x</td>
+      <td class="text-slate-400">${f.description}</td>
+    </tr>`;
+  }
+  html += "</tbody></table>";
+  return html;
+}
+
+async function toggleFactors(empId) {
+  const s = attritionState;
+  const row = document.getElementById(`att-factors-${empId}`);
+  const content = document.getElementById(`att-factors-content-${empId}`);
+  const btn = document.querySelector(`.att-factor-toggle[data-emp="${empId}"]`);
+  if (!row) return;
+
+  if (s.expandedRows.has(empId)) {
+    // Collapse
+    s.expandedRows.delete(empId);
+    row.classList.add("hidden");
+    btn.textContent = "[Show Factors]";
+    return;
+  }
+
+  // Expand
+  s.expandedRows.add(empId);
+  row.classList.remove("hidden");
+  btn.textContent = "[Hide Factors]";
+
+  // Check cache first; if factors already in list data, use those
+  const empData = s.employees.find(e => e.employee.employee_id === empId);
+  if (empData && empData.factors && empData.factors.length) {
+    content.innerHTML = renderFactors(empData.factors);
+    return;
+  }
+
+  // Otherwise fetch from detail endpoint (and cache)
+  if (s.factorCache[empId]) {
+    content.innerHTML = renderFactors(s.factorCache[empId]);
+    return;
+  }
+
+  content.innerHTML = `<span class="text-slate-500 text-xs">Loading factors…</span>`;
+  try {
+    const data = await attritionFetch(`/tm/attrition/employees/${empId}`);
+    s.factorCache[empId] = data.factors;
+    content.innerHTML = renderFactors(data.factors);
+  } catch (err) {
+    content.innerHTML = `<span class="text-red-400 text-xs">Error: ${err.message}</span>`;
+  }
+}
+
+function updatePagination() {
+  const s = attritionState;
+  const pag = document.getElementById("att-pagination");
+  const info = document.getElementById("att-page-info");
+  const prevBtn = document.getElementById("att-prev");
+  const nextBtn = document.getElementById("att-next");
+
+  if (s.total === 0) {
+    pag.classList.add("hidden");
+    return;
+  }
+
+  pag.classList.remove("hidden");
+  const from = s.offset + 1;
+  const to = Math.min(s.offset + s.limit, s.total);
+  info.textContent = `Showing ${from}–${to} of ${s.total}`;
+  prevBtn.disabled = s.offset === 0;
+  nextBtn.disabled = s.offset + s.limit >= s.total;
 }
 
 // ── Init ────────────────────────────────────────────────────────────────────

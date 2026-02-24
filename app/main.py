@@ -16,7 +16,7 @@ from app.auth import require_api_key
 from app.config import settings
 from app.database import create_pool, close_pool
 from app.middleware.logging import AccessLogMiddleware
-from app.routers import employees, skills, talent_search, orgs
+from app.routers import employees, skills, talent_search, orgs, attrition
 
 DESCRIPTION = """
 ## Talent Management Skills API
@@ -35,6 +35,7 @@ skill catalog, employee-skill assignments, and evidence records in the `tm` sche
 | **Skills** | 3, 4, 6, 7, 9, 11 | Experts, coverage, candidates, staleness, co-occurrence, taxonomy |
 | **Talent Search** | 5 | Multi-skill AND search across the workforce |
 | **Organizations** | 12 | Org-level skill summaries with hierarchy traversal |
+| **Attrition Prediction** | — | Deterministic attrition risk model with explainable factors |
 """
 
 TAGS_METADATA = [
@@ -42,6 +43,7 @@ TAGS_METADATA = [
     {"name": "Skills", "description": "Skill-centric endpoints — experts, coverage, staleness, co-occurrence, and taxonomy browsing."},
     {"name": "Talent Search", "description": "Multi-skill AND search to find employees matching multiple skill criteria."},
     {"name": "Organizations", "description": "Org-level skill summaries using recursive hierarchy traversal."},
+    {"name": "Attrition Prediction", "description": "Deterministic attrition risk predictions with explainable factor breakdowns."},
 ]
 
 
@@ -124,6 +126,7 @@ app.include_router(employees.router, dependencies=_auth)
 app.include_router(skills.router, dependencies=_auth)
 app.include_router(talent_search.router, dependencies=_auth)
 app.include_router(orgs.router, dependencies=_auth)
+app.include_router(attrition.router, dependencies=_auth)
 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
