@@ -22,7 +22,7 @@ The TM Skills API is **fully implemented and deployed**. See LEARNINGS.md for de
 - **Configuration:** pydantic-settings (reads .env locally, env vars in production)
 - **Database:** PostgreSQL `hr_data` database, `tm` schema (separate from HR `public` schema)
 - **Security:** API key auth, CORS whitelist, rate limiting (slowapi), security headers, access logging
-- **Tests:** pytest + pytest-asyncio + httpx (66 integration tests against real DB)
+- **Tests:** pytest + pytest-asyncio + httpx (70 integration tests against real DB)
 
 ### Architecture
 ```
@@ -70,8 +70,15 @@ deploy.sh          → CF deployment script with auto-generated API key
 pip install -e ".[dev,generator]"   # Install all deps
 cp .env.example .env                # Configure DB credentials
 uvicorn app.main:app --reload       # Start dev server at localhost:8000
-pytest tests/ -v                    # Run 66 integration tests
+pytest tests/ -v                    # Run 70 integration tests
 ```
+
+### Employee Name Search
+
+- `GET /tm/employees/search?name=&limit=` — case-insensitive partial match on `display_name` in `tm.employee_ref`
+- `name` param requires `min_length=2`; `limit` defaults to 20 (max 100)
+- Returns `EmployeeSearchResult` with `employees: list[EmployeeRef]` and `total: int`
+- Route is defined **before** `/{employee_id}` routes in `app/routers/employees.py` to avoid path conflicts
 
 ### Attrition Prediction
 
@@ -105,4 +112,8 @@ A deterministic rules-based model predicting employee attrition risk. Not ML —
 - Feature extraction uses LATERAL joins for batch queries (`GET_EMPLOYEE_FEATURES_BATCH`) and CTEs for single-employee queries
 - `public.*` tables must be explicitly prefixed in SQL since `search_path` is `tm,public`
 - All predictions include explainable factor breakdowns (factor name, raw value, multiplier, human-readable description)
-- The API explorer includes an interactive Attrition Risk Dashboard (sidebar → "Attrition Prediction" → "Risk Dashboard") with summary cards, filters, sortable table, and expandable per-row factor breakdowns
+- The API explorer sidebar "Attrition Prediction" group has 4 panels:
+  - **Risk Dashboard** — summary cards, filters, sortable paginated table with expandable factor breakdowns
+  - **Employee Lookup** — name search (calls `/tm/employees/search`) + ID lookup (calls `/tm/attrition/employees/{id}`) with full prediction + factor breakdown
+  - **High-Risk Employees** — threshold/limit filter, calls `/tm/attrition/high-risk`, table with expandable factors
+  - **Org Summary** — org ID input, calls `/tm/attrition/orgs/{id}/summary`, risk distribution cards + top-risk table
