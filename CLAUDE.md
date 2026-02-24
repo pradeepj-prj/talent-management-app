@@ -22,11 +22,11 @@ The TM Skills API is **fully implemented and deployed**. See LEARNINGS.md for de
 - **Configuration:** pydantic-settings (reads .env locally, env vars in production)
 - **Database:** PostgreSQL `hr_data` database, `tm` schema (separate from HR `public` schema)
 - **Security:** API key auth, CORS whitelist, rate limiting (slowapi), security headers, access logging
-- **Tests:** pytest + pytest-asyncio + httpx (48 integration tests against real DB)
+- **Tests:** pytest + pytest-asyncio + httpx (66 integration tests against real DB)
 
 ### Architecture
 ```
-app/routers/       → HTTP endpoint definitions (4 routers: employees, skills, talent_search, orgs)
+app/routers/       → HTTP endpoint definitions (5 routers: employees, skills, talent_search, orgs, attrition)
 app/services/      → Business logic and data transformation
 app/queries/       → Raw SQL with asyncpg $1 positional parameters
 app/models/        → Pydantic response schemas
@@ -40,7 +40,7 @@ deploy.sh          → CF deployment script with auto-generated API key
 ```
 
 ### Key Conventions
-- All SQL is hand-written (no ORM) — enables recursive CTEs, window functions, relational division patterns.
+- All SQL is hand-written (no ORM) — enables recursive CTEs, LATERAL joins, window functions, relational division patterns.
 - asyncpg uses `$1, $2` positional parameters (prepared statements), not `%s` or `:name`.
 - The `tm` schema `search_path` is set at pool level — SQL queries don't need schema prefixes.
 - Tests run against the real database (no mocks). Data must be generated first with `scripts/generate_tm_data.py --seed 42`.
@@ -70,5 +70,39 @@ deploy.sh          → CF deployment script with auto-generated API key
 pip install -e ".[dev,generator]"   # Install all deps
 cp .env.example .env                # Configure DB credentials
 uvicorn app.main:app --reload       # Start dev server at localhost:8000
-pytest tests/ -v                    # Run 48 integration tests
+pytest tests/ -v                    # Run 66 integration tests
 ```
+
+### Attrition Prediction
+
+A deterministic rules-based model predicting employee attrition risk. Not ML — uses a formula with 9 weighted factors combining HR master data and TM-specific features.
+
+**Formula:** `P(leave) = 0.12 × perf × tenure × emp_type × seniority × promotion × skill_staleness × skill_breadth × leadership × evidence_currency` (capped at 0.95)
+
+**Factors (from HR `public.*` and TM `tm.*` tables):**
+
+| # | Factor | Source Table | Multiplier Range |
+|---|--------|-------------|-----------------|
+| 1 | Performance | `public.employee_performance` (latest rating) | 0.4 – 2.5 |
+| 2 | Tenure | `public.employee` (hire_date) | 0.5 – 1.8 |
+| 3 | Employment type | `public.employee` (employment_type) | 1.0 – 2.0 |
+| 4 | Seniority | `tm.employee_ref` (seniority_level) | 0.5 – 1.3 |
+| 5 | Recent promotion | `public.employee_job_assignment` (start_date in last 18mo) | 0.4 – 1.0 |
+| 6 | Skill staleness | `tm.employee_skill` (avg days since update) | 0.8 – 1.6 |
+| 7 | Skill breadth | `tm.employee_skill` (count) | 0.8 – 1.5 |
+| 8 | Leadership dev | `tm.employee_skill` + `tm.skill` (leadership category, proficiency≥3) | 0.6 – 1.2 |
+| 9 | Evidence currency | `tm.skill_evidence` (dated within 12mo) | 0.7 – 1.2 |
+
+**Risk classification:** <0.10 → low, 0.10-0.25 → medium, 0.25-0.50 → high, 0.50-0.95 → critical
+
+**Endpoints:**
+- `GET /tm/attrition/employees/{employee_id}` — single employee prediction with full factor breakdown
+- `GET /tm/attrition/employees?limit=&offset=&min_risk=&sort=` — paginated list (sort: risk_desc/risk_asc/name)
+- `GET /tm/attrition/high-risk?threshold=&limit=&offset=` — employees above probability threshold (default 0.25)
+- `GET /tm/attrition/orgs/{org_unit_id}/summary?top_risk_limit=` — org-level risk distribution + top N riskiest
+
+**Key implementation notes:**
+- Feature extraction uses LATERAL joins for batch queries (`GET_EMPLOYEE_FEATURES_BATCH`) and CTEs for single-employee queries
+- `public.*` tables must be explicitly prefixed in SQL since `search_path` is `tm,public`
+- All predictions include explainable factor breakdowns (factor name, raw value, multiplier, human-readable description)
+- The API explorer includes an interactive Attrition Risk Dashboard (sidebar → "Attrition Prediction" → "Risk Dashboard") with summary cards, filters, sortable table, and expandable per-row factor breakdowns
